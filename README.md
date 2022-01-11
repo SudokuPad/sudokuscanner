@@ -3,6 +3,7 @@
 ## Installation
 - Install yt-dlp in path (https://github.com/yt-dlp/yt-dlp)
 - Install ffmpeg in path
+- Install ImageMagick (https://imagemagick.org/script/download.php) and make sure the correct "convert" is found in the path
 
 Run `npm install`
 
