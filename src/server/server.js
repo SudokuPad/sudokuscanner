@@ -19,10 +19,11 @@ const puzzlesPath = `${cachePath}puzzles/`;
 const videosPath = `${cachePath}videos/`;
 const framesPath = `${cachePath}frames/`;
 const descriptionsPath = `${cachePath}descriptions/`;
+const rePathPrefix = /\.[\/\\](?:[^\/\\]+[\/\\])*/;
 
 const videoFnToFrameFn = (videoFn, time) => videoFn
 	.replace(/ytvideo_([^\.]+)\..*/, `frame_$1${time ? '_' + time : ''}`)
-	.replace(videosPath, framesPath);
+	.replace(rePathPrefix, framesPath);
 
 const cachedParsePuzzleDataStr = createDataCacher(`${puzzlesPath}puzzleindex.json`, key => `${puzzlesPath}${key}.ctc`, parsePuzzleDataStr);
 
@@ -38,7 +39,7 @@ const handleFetchVideo = async (url, request, response) => {
 	let videoFn = await fetchYTVideo(videoId, videosPath, 360, 'w');
 	console.log('videoFn:', videoFn);
 	console.timeEnd('handleFetchVideo');
-	response.end(JSON.stringify({video: videoFn.replace(videosPath, '')}));
+	response.end(JSON.stringify({video: videoFn.replace(rePathPrefix, '')}));
 };
 
 const handleFetchVideoDescription = async (url, request, response) => {
@@ -66,9 +67,9 @@ const handleExtractFrame = async (url, request, response) => {
 	videoFn = `${videosPath}${videoFn}`;
 	let frameFn = videoFnToFrameFn(videoFn, frameTime) + '.jpg';
 	console.log('handleExtractFrame:', frameFn);
-	frameFn = await getVideoFrame(videoFn, frameFn.replace(videosPath, framesPath), frameTime);
+	frameFn = await getVideoFrame(videoFn, frameFn.replace(rePathPrefix, framesPath), frameTime);
 	console.timeEnd('handleExtractFrame');
-	response.end(JSON.stringify({frame: frameFn.replace(framesPath, 'frames/')}));
+	response.end(JSON.stringify({frame: frameFn.replace(rePathPrefix, 'frames/')}));
 };
 
 const handlePuzzle = async (url, request, response) => {
