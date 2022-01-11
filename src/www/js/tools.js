@@ -160,7 +160,7 @@
 		const rePuzzleId = /(\/[a-z\-.]+\/(?:webapp|sudoku)\/([0-9a-zA-Z]+))/;
 		return (desc.match(rePuzzleUrl) || []).map(url => url.match(rePuzzleId)[2]);
 	};
-	const rePuzzleUrlFilter = /^https?:\/\/(www\.)?((apps\.apple|store\.steampowered|play\.google|discord\.gg|patreon|instagram|teespring|kickstarter)(\.com)?.*|[^/]+\/?)$/;
+	const rePuzzleUrlFilter = /^https?:\/\/(www\.)?((apps\.apple|store\.steampowered|play\.google|discord\.gg|patreon|instagram|teespring|kickstarter|docs\.google)(\.com)?.*|[^/]+\/?)$/;
 	const getPuzzleUrlsFromDescription = desc => desc
 		.match(/https?:\/\/[^\s:\)\]]+/gm)
 		.filter(url => !rePuzzleUrlFilter.test(url));
