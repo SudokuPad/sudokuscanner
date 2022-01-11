@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" >
+	<head>
+		<meta charset="UTF-8">
+		<title>Sven's Sudoku Scanner</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+	</head>
+	<body>
+		<div id="app">
+			<div><label>Youtube URL:<br/><input name="videourl" style="width: 20rem;"></label></div>
+			<div><label>Correct Solution (optional):<br/><input name="correctsol" style="width: 20rem;"></label></div>
+			<div>Load Test Case:<br/><select name="testcase"></select></div>
+			<button style="display: block;" name="process">Process Video</button>
+			<div class="log" style="width: 40rem; height: 16rem; overflow-y: scroll; font-family: monospace; font-size: 0.8rem; white-space: pre;"></div>
+		</div>
+
+		<div id="puzzleplayer" class="app">
+			<div class="game">
+				<div id="board" class="board">
+					<div class="grid">
+						<div class="cells"></div>
+						<svg id="svgrenderer" class="boardsvg" xmlns="http://www.w3.org/2000/svg" version="1.1" draggable="false" style="vector-effect: non-scaling-stroke;">
+							<g id="background" />
+							<g id="underlay" />
+							<g id="cell-colours" />
+							<g id="cell-highlights" />
+							<g id="arrows" />
+							<g id="cell-grids" />
+							<g id="cell-errors" />
+							<g id="overlay" />
+							<g id="cell-givens" />
+							<g id="cell-pen" />
+							<g id="cell-pencilmarks" />
+							<g id="cell-candidates" />
+							<g id="cell-values" />
+						</svg>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			let testCases = [
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=jBioq8qvC2M',
+						correctSol: '914725836358169247672483591736814925249357168581692473825936714167248359493571682'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=NikK2QnvM9M',
+						correctSol: '291873456467159832538624179376245918125968743984317625843792561712586394659431287'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=lN9kWjPiKKk',
+						correctSol: '893624517427915836156783492614298753572436981938157264281349675749561328365872149'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=k84azF06Ql8',
+						correctSol: '249357186367812495815496732436279518571638924928541673153724869694183257782965341'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=jmZAIUkutsY',
+						correctSol: '469875321712493658538261497623587149871942563954136782245318976386759214197624835'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=c__XBsPos-s',
+						correctSol: '419362758327815496568974231943128567271659384856743129132496875684537912795281643'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=1et1CaeJ9ko',
+						correctSol: '172694583638512497594378261481736952925481376763925814819263745246857139357149628'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=LVu2T0HsM8g',
+						correctSol: '234781596571926438698543271753468912416392785982175643129637854367854129845219367'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=0Rn7K7LQKEc',
+						correctSol: '782315694691248537345679821536782419827491356914563278278954163159836742463127985'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=t_upg5jSJ6s',
+						correctSol: '918234765245178936173965482857312694639421857426793518381657249592846173764589321'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=2tgiH5QldMM',
+						correctSol: '139118398219412449332248438316146346136716736556476476255772999555788778552282998'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=k90bwDVb3bw',
+						correctSol: '986523714257841369431697285674982153398715426512364978749158632863279541125436897'
+					},
+				];
+			let testcaseElem = document.querySelector('[name="testcase"]');
+			let videourlElem = document.querySelector('[name="videourl"]');
+			let correctsolElem = document.querySelector('[name="correctsol"]');
+			let processElem = document.querySelector('[name="process"]');
+			let logElem = document.querySelector('.log');
+			testcaseElem.innerHTML = '<option />' + testCases
+				.map(({videoUrl, correctSol}, idx) => `<option value="${idx}">Test ${idx}: ${videoUrl.replace(/.*?v=(.*)/, '$1')}</option>`).join('\n');
+			testcaseElem.addEventListener('change', event => {
+				let testCase = testCases[event.target.value];
+				if(testCase === undefined) {
+					videourlElem.value = correctsolElem.value = '';
+				}
+				else {
+					videourlElem.value = testCase.videoUrl;
+					correctsolElem.value = testCase.correctSol;
+				}
+			});
+
+			processElem.addEventListener('click', event => processVideo(videourlElem.value, correctsolElem.value, logElem));
+
+			let puzzleHost = '/ctc/';
+			[
+				'style.css'
+			]
+			.forEach(name => document.head.appendChild(Object.assign(document.createElement('link'), {
+				rel: 'stylesheet', href: puzzleHost + name})));
+			document.head.appendChild(Object.assign(document.createElement('style'), {textContent: `
+				#puzzleplayer { width: auto; height: auto; }
+				#puzzleplayer .board { opacity: 1; }
+				
+				.cell-value { font-size: 3rem !important; }
+				.cell-given { font-size: 3rem !important; }
+				
+				html { overflow: visible; }
+				html * { user-select: auto; }
+				.game { display: block; }
+				/*#svgrenderer { width: 360px !important; height: 360px !important; }*/
+				#svgrenderer {
+					transform-origin: top left; transform: scale(calc(360/580));
+					margin: auto !important;
+				}
+				.cell { width: 40px; height: 40px; }
+				#app button { height: 1.5rem; line-height: 1.5rem; font-size: 1rem; border-radius: 0.2rem; }
+			`}));
+			[
+				'portableevents.js',
+				'utilities.js',
+				'lzipper.js',
+				'fpuzzlesdecoder.min.js',
+				'puzzletools.js',
+				'puzzlezipper.js',
+				'puzzleloader.js',
+				'framework.js',
+				'script.js',
+				'solver.js',
+			]
+			.forEach(name => document.body.appendChild(Object.assign(document.createElement('script'), {
+				src: puzzleHost + name})));
+		</script>
+
+		<script src="/vendor/tesseract/tesseract-1.0.19.min.js"></script>
+		<script src="/js/tools.js"></script>
+	</body>
+</html>

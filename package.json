@@ -1,0 +1,15 @@
+{
+  "name": "sudokuscanner",
+  "version": "1.0.0",
+  "description": "",
+  "main": "/src/server/index.js",
+  "scripts": {
+    "start": "nodemon --watch 'src/server/**/*' src/server/server.js -- -p 8080 -d"
+  },
+  "author": "Sven Neumann <killroy@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "mkdirp": "^1.0.4",
+    "node-fetch": "^2.6.6"
+  }
+}
