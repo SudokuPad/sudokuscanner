@@ -84,7 +84,7 @@ const handlePuzzle = async (url, request, response) => {
 };
 
 const handleCTCProxy = async (url, request, response) => {
-	let ctcHost = 'http://localhost:5000/';
+	let ctcHost = 'https://app.crackingthecryptic.com/';
 	let name = (url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1];
 	console.log('handleCTCProxy:', name);
 	let res = await fetch(`${ctcHost}${name}`);
