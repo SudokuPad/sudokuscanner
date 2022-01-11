@@ -86,12 +86,13 @@ const getVideoFrame = async (videoFn, frameFn, frameTime = 0) => {
 		let duration = parseFloat(await getVideoLength(videoFn));
 		frameTime = duration + frameTime;
 	}
-	let cmd = `ffmpeg -y -accurate_seek -ss ${frameTime} -i ${videoFn} -frames:v 1 -q:v 1 -src_range 0 -dst_range 1 ${frameFn.replace(/\.jpg/, '.png')}`;
+	//let cmd = `ffmpeg -y -accurate_seek -ss ${frameTime} -i ${videoFn} -frames:v 1 -q:v 1 -src_range 0 -dst_range 1 ${frameFn.replace(/\.jpg/, '.png')}`;
+	let cmd = `ffmpeg -y -accurate_seek -ss ${frameTime} -i ${videoFn} -frames:v 1 -q:v 1 -src_range 0 -dst_range 1 ${frameFn}`;
 	console.log('cmd:', cmd);
 	let res = await exec(cmd);
-	cmd = `convert -quality 90 ${frameFn.replace(/\.jpg/, '.png')} ${frameFn}`;
-	console.log('cmd:', cmd);
-	res = await exec(cmd);
+	//cmd = `convert -quality 90 ${frameFn.replace(/\.jpg/, '.png')} ${frameFn}`;
+	//console.log('cmd:', cmd);
+	//res = await exec(cmd);
 	return frameFn;
 };
 
