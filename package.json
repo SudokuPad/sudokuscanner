@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "mkdirp": "^1.0.4",
-    "node-fetch": "^2.6.6"
+    "node-fetch": "^2.6.6",
+    "nodemon": "^2.0.15"
   }
 }
