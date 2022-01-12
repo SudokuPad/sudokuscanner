@@ -729,7 +729,7 @@
 		console.timeEnd('findSolByOcr');
 		let digits = [...Array(81)].map((_, i) => [i, '.', 0]);
 
-		console.log('givens:', givens);
+		console.log('givens:', givens.join(''));
 		res.symbols.forEach(symbol => {
 			let {x0, y0, x1, y1} = symbol.bbox;
 			let r = Math.floor((y0 + y1) / 2 / height * rows);
