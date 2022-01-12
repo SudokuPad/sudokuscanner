@@ -1025,9 +1025,9 @@
 			console.time('frame120');
 			let blankFrameImg = await getFrame(videoId, 120);
 			console.timeEnd('frame120');
-			console.time('frame-25');
-			let solvedFrameImg = await getFrame(videoId, -25);
-			console.timeEnd('frame-25');
+			console.time('frame-40');
+			let solvedFrameImg = await getFrame(videoId, -40);
+			console.timeEnd('frame-40');
 			timer('frames');
 			log(`Fetch frames (${timer('frames')}ms)`);
 
