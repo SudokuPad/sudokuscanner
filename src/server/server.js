@@ -133,6 +133,42 @@ const handleFetchVideoFrame = async (url, request, response) => {
 	}
 };
 
+const handleTestMultiFrame = async (url, request, response) => {
+	try {
+		let videoId = '3l6GeE36LP4';
+		let videoUrl = 'https://rr2---sn-q5u5nugx5h-ha5s.googlevideo.com/videoplayback?expire=1642023795&ei=E_feYbTYM43sW5Okm7gM&ip=46.11.93.147&id=o-ANHo0Qhx6EBZoEao5dSDoZjdPiHztjz9ATXcw1wzWc7j&itag=134&source=youtube&requiressl=yes&mh=JH&mm=31%2C29&mn=sn-q5u5nugx5h-ha5s%2Csn-hpa7znz6&ms=au%2Crdu&mv=m&mvi=2&pcm2cms=yes&pl=24&initcwndbps=738750&vprv=1&mime=video%2Fmp4&gir=yes&clen=305751540&otfp=1&dur=14185.133&lmt=1641535639624147&mt=1642001835&fvip=3&keepalive=yes&fexp=24001373%2C24007246&beids=24152032&c=ANDROID&txp=7216222&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cvprv%2Cmime%2Cgir%2Cclen%2Cotfp%2Cdur%2Clmt&sig=AOq0QJ8wRQIhAMN65NAHkdZKl5XuQN5esVnS6GCJwtbM68YL0KzMSj-bAiAPbmeSc7t14gboSkSggkEB2JNcvpAO-YOfRwDa0sZdmw%3D%3D&lsparams=mh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpcm2cms%2Cpl%2Cinitcwndbps&lsig=AG3C_xAwRgIhANCMJv2dfE3GM7QPHBU4jNyvL-GZbtf7vMwekMmQRmToAiEAmo0eq176jnC-Yv8MCmXHuwkFNZXaxgayba1otOgjlqw%3D';
+		let cmd, res;
+		const fetchFrame = async time => {
+			let frameFn = `frame_${videoId}_${String(time).padStart(4, '0')}.jpg`;
+			let cmd = `time ffmpeg -y -skip_frame nokey -ss ${time} -i "${videoUrl}" -frames:v 1 -q:v 1 "${frameFn}"`;
+			console.log('fetching:', frameFn);
+			console.time(frameFn);
+			let {stdout} = await exec(cmd);
+			console.timeEnd(frameFn);
+			console.log(stdout);
+		};
+		console.time('Promise.all');
+		await Promise.all([...Array(40).keys()].map(n => fetchFrame(n * 5 * 60)))
+		console.timeEnd('Promise.all');
+		/*
+		for(var i = 0; i < 20; i++) {
+			let time = i * 5 * 60, frameFn = `frame_${videoId}_${String(time).padStart(4, '0')}.jpg`;
+			let cmd = `time ffmpeg -y -skip_frame nokey -ss ${time} -i "${videoUrl}" -frames:v 1 -q:v 1 "${frameFn}"`;
+			console.log('  cmd:', cmd);
+			console.time(frameFn);
+			let {stdout} = await exec(cmd);
+			console.timeEnd(frameFn);
+			console.log(stdout);
+		}
+		*/
+		response.end(JSON.stringify({}));
+	}
+	catch (err) {
+		console.error('Error in handleTestMultiFrame("%s"):', url, err);
+		response.writeHead(500).end(err);
+	}
+};
+
 const handlePuzzle = async (url, request, response) => {
 	try {
 		let uriStr = decodeURIComponent((url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1]);
@@ -167,6 +203,7 @@ const handleCTCProxy = async (url, request, response) => {
 
 
 let routes = [
+	{route: /^\/testmultiframe\/(.*)/, handler: handleTestMultiFrame},
 	{route: '/favicon.ico', handler: handle404},
 	{route: /^\/fetchvideo\/(.*)/, handler: handleFetchVideo},
 	{route: /^\/fetchvideodescription\/(.*)/, handler: handleFetchVideoDescription},
