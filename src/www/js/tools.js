@@ -208,14 +208,14 @@
 		let canvas = Object.assign(document.createElement('canvas'), {width: size, height: size});
 		let ctx = canvas.getContext('2d');
 		ctx.drawImage(img, 0, 0);
-		let edges = findBoard(canvas, 200, 0.30);
+		let edges = findBoard(canvas, 170, 0.30);
 		let w = h = Math.min(size, edges.right - edges.left) + 5;
 		ctx.drawImage(img,
 			Math.max(0, edges.left - 5), 0, w, size,
 			0, 0, w, size);
 		ctx.fillStyle = '#fff';
 		ctx.fillRect(w, 0, size, size);
-		edges = findBoard(canvas, 200, 0.30);
+		edges = findBoard(canvas, 170, 0.30);
 		w = h = Math.max(edges.right - edges.left, edges.bottom - edges.top);
 		ctx.drawImage(canvas, edges.left, edges.top, w, h, 0, 0, size, size);
 		return canvas;
