@@ -4,12 +4,14 @@ const path = require('path');
 const fetch = require('node-fetch');
 const {SimpleServer, loadArgs, serveStatic, serveStaticPath} = require('./simpleserver');
 const {
+	fileExists,
 	createDataCacher,
 	ytUrlToId,
 	fetchYTVideo,
 	fetchYTDescription,
 	getVideoLength,
 	getVideoFrame,
+	convertImage,
 	parsePuzzleDataStr,
 } = require('./yt_tools');
 
@@ -20,6 +22,11 @@ const videosPath = `${cachePath}videos/`;
 const framesPath = `${cachePath}frames/`;
 const descriptionsPath = `${cachePath}descriptions/`;
 const rePathPrefix = /\.[\/\\](?:[^\/\\]+[\/\\])*/;
+
+
+let frameExtractExt = '.png';
+let frameStoreExt = '.jpg';
+//TODO: Delete unneeded images
 
 const videoFnToFrameFn = (videoFn, time) => videoFn
 	.replace(/ytvideo_([^\.]+)\..*/, `frame_$1${time ? '_' + time : ''}`)
@@ -33,64 +40,87 @@ const handle404 = async (url, request, response) => {
 };
 
 const handleFetchVideo = async (url, request, response) => {
-	let videoId = (url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1];
-	console.log('handleFetchVideo:', videoId);
-	console.time('handleFetchVideo');
-	let videoFn = await fetchYTVideo(videoId, videosPath, 360, 'w');
-	console.log('videoFn:', videoFn);
-	console.timeEnd('handleFetchVideo');
-	response.end(JSON.stringify({video: videoFn.replace(rePathPrefix, '')}));
+	try {
+		let videoId = (url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1];
+		console.log('handleFetchVideo > videoId:', videoId);
+		let videoFn = await fetchYTVideo(videoId, videosPath, 360, 'w');
+		//console.log('handleFetchVideo > videoFn:', videoFn);
+		response.end(JSON.stringify({video: videoFn.replace(rePathPrefix, '')}));
+	}
+	catch (err) {
+		console.error('Error in handleFetchVideo("%s"):', url, err);
+		response.writeHead(500).end(err);
+	}
 };
 
 const handleFetchVideoDescription = async (url, request, response) => {
-	console.time('handleFetchVideoDescription');
-	let videoId = (url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1];
-	console.log('handleFetchVideoDescription:', videoId);
-	let descFn = `${descriptionsPath}desc_${videoId}.description`;
-	let stat;
 	try {
-		stat = await fs.stat(descFn);
+		let videoId = (url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1];
+		console.log('handleFetchVideoDescription > videoId:', videoId);
+		let descFn = `${descriptionsPath}desc_${videoId}.description`;
+		if(!(await fileExists(descFn))) descFn = await fetchYTDescription(videoId, `${descriptionsPath}desc_${videoId}`);
+		let res = await fs.readFile(descFn, 'utf8');
+		response.end(JSON.stringify({description: res}));
 	}
 	catch (err) {
-		descFn = await fetchYTDescription(videoId, `${descriptionsPath}desc_${videoId}`);
+		console.error('Error in handleFetchVideoDescription("%s"):', url, err);
+		response.writeHead(500).end(err);
 	}
-	let res = await fs.readFile(descFn, 'utf8');
-	console.timeEnd('handleFetchVideoDescription');
-	response.end(JSON.stringify({description: res}));
 };
 
 const handleExtractFrame = async (url, request, response) => {
-	console.time('handleExtractFrame');
-	const reUrlFrame = /^\/[^/]+\/([^\/]*)(?:\/([^\/]*))?/;
-	console.log('pathname:', url.pathname);
-	let [videoFn, frameTime = -25] = url.pathname.match(reUrlFrame).slice(1, 3);
-	videoFn = `${videosPath}${videoFn}`;
-	let frameFn = videoFnToFrameFn(videoFn, frameTime) + '.jpg';
-	console.log('handleExtractFrame:', frameFn);
-	frameFn = await getVideoFrame(videoFn, frameFn.replace(rePathPrefix, framesPath), frameTime);
-	console.timeEnd('handleExtractFrame');
-	response.end(JSON.stringify({frame: frameFn.replace(rePathPrefix, 'frames/')}));
+	try {
+		const reUrlFrame = /^\/[^/]+\/([^\/]*)(?:\/([^\/]*))?/;
+		let [videoFn, frameTime = -25] = url.pathname.match(reUrlFrame).slice(1, 3);
+		console.log('handleExtractFrame > videoFn/frameTime:', videoFn, frameTime);
+		videoFn = `${videosPath}${videoFn}`;
+		let sourceExt = frameExtractExt, targetExt = frameStoreExt;
+		let frameFn = videoFnToFrameFn(videoFn, frameTime) + sourceExt;
+		console.log('handleExtractFrame > videoFn:', videoFn);
+		console.log('handleExtractFrame > frameFn:', frameFn);
+		frameFn = await getVideoFrame(videoFn, frameFn.replace(rePathPrefix, framesPath), frameTime);
+		if(sourceExt !== targetExt) {
+			frameFn = await convertImage(frameFn, frameFn.replace(sourceExt, targetExt));
+		}
+		let frame = frameFn.replace(rePathPrefix, 'frames/');
+		response.end(JSON.stringify({frame}));
+	}
+	catch (err) {
+		console.error('Error in handleExtractFrame("%s"):', url, err);
+		response.writeHead(500).end(err);
+	}
 };
 
 const handlePuzzle = async (url, request, response) => {
-	let uriStr = decodeURIComponent((url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1]);
 	try {
-		let puzzle = await cachedParsePuzzleDataStr(uriStr);
-		response.end(JSON.stringify({puzzle}));
+		let uriStr = decodeURIComponent((url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1]);
+		try {
+			let puzzle = await cachedParsePuzzleDataStr(uriStr);
+			response.end(JSON.stringify({puzzle}));
+		} catch (error) {
+			response.end(JSON.stringify({error}));
+		}
 	}
-	catch(err) {
-		console.error(err.message);
-		response.end(JSON.stringify({error: err}));
+	catch (err) {
+		console.error('Error in handlePuzzle("%s"):', url, err);
+		response.writeHead(500).end(err);
 	}
 };
 
 const handleCTCProxy = async (url, request, response) => {
-	let ctcHost = 'https://app.crackingthecryptic.com/';
-	let name = (url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1];
-	console.log('handleCTCProxy:', name);
-	let res = await fetch(`${ctcHost}${name}`);
-	let text = await res.text();
-	response.end(text);
+	try {
+		let ctcHost = 'https://app.crackingthecryptic.com/';
+		let name = (url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1];
+		console.log('handleCTCProxy:', name);
+		let res = await fetch(`${ctcHost}${name}`);
+		let text = await res.text();
+		response.end(text);
+	}
+	catch (err) {
+		console.error('Error in handleCTCProxy:', err);
+		response.writeHead(500).end(err);
+		throw err;
+	}
 };
 
 

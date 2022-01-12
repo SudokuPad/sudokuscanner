@@ -107,9 +107,14 @@ const SimpleServer = (() => {
 			</html>`
 		});
 	SS.pathToContentType = pathname => {
-		switch((pathname.match(/\.([a-z]+)$/) || [])[1]) {
+		let ext = (pathname.match(/\.([a-z]+)$/) || [])[1];
+		switch(ext) {
 			case 'js': return 'application/javascript';
 			case 'css': return 'text/css';
+			case 'jpg':
+			case 'jpeg':
+			case 'png':
+				return `image/${ext}`;
 			default: return 'text/html';
 		}
 	};

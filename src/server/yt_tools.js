@@ -8,6 +8,16 @@ const PuzzleTools = require('./puzzletools.js');
 const {md5Digest, loadFPuzzle} = require('./fpuzzlesdecoder.js');
 
 
+const fileExists = async fn => {
+	try {
+		await fs.stat(fn);
+		return true;
+	}
+	catch (err) {
+		return false;
+	}
+};
+
 const createDataCacher = (indexFile, getDataFilename, getData) => async key => {
 	let index;
 	let keyHash = md5Digest(key);
@@ -33,7 +43,7 @@ const createDataCacher = (indexFile, getDataFilename, getData) => async key => {
 			return data;
 		}
 		catch(err) {
-			console.error('Error creating data for cache:', err);
+			console.error('Error in createDataCacher:', err);
 			index[keyHash] = {error: err.toString()};
 			await fs.writeFile(indexFile, JSON.stringify(index, null, '\t'), {encoding: 'utf8'});
 			throw err;
@@ -55,45 +65,47 @@ const fetchYTVideo = async (videoId, destDir = './', res = 480, quality = 'w') =
 	const reDownloaded = /\[download\]\s+([^\s]+) has already been downloaded/m;
 	let sortSize = quality.match(/^w/i) ? '+size' : 'size'
 	let cmd = `yt-dlp --no-mtime -f "bv*" -S "res:${res},${sortSize}" ${videoId} -o "${destDir}ytvideo_%(id)s${res ? '_' + res : ''}${quality ? '_' + quality[0] : ''}.%(ext)s"`;
-	console.log('cmd:', cmd);
+	console.log('fetchYTVideo > cmd:', cmd);
 	let {stdout} = await exec(cmd);
-	return (stdout.match(reDestination) || stdout.match(reDownloaded) || [])[1];
+	let videoFn = (stdout.match(reDestination) || stdout.match(reDownloaded) || [])[1];
+	console.log('fetchYTVideo > videoFn:', videoFn);
+	return videoFn;
 };
+
 const fetchYTDescription = async (videoId, destFn) => {
-	try {
-		let stat = await fs.stat(destFn);
-		return destFn;
-	}
-	catch (err) {}
+	if(await fileExists(destFn)) return destFn;
 	const reFilename = /\[info\] Writing video description to:\s+([^\s]+)/m;
 	let cmd = `yt-dlp --write-description --skip-download --youtube-skip-dash-manifest -o "${destFn}" ${videoId}`;
-	console.log('cmd:', cmd);
+	console.log('fetchYTDescription > cmd:', cmd);
 	let {stdout} = await exec(cmd);
 	return (stdout.match(reFilename) || [])[1];
 };
+
 const getVideoLength = async videoFn => {
 	let res = await exec(`ffprobe -v 0 -show_entries format=duration -of compact=p=0:nk=1 ${videoFn}`);
 	return parseFloat(res.stdout);
 };
+
 const getVideoFrame = async (videoFn, frameFn, frameTime = 0) => {
-	try {
-		let stat = await fs.stat(frameFn);
-		return frameFn;
-	}
-	catch (err) {}
+	if(await fileExists(frameFn)) return frameFn;
 	frameTime = parseFloat(frameTime);
 	if(frameTime < 0) {
 		let duration = parseFloat(await getVideoLength(videoFn));
 		frameTime = duration + frameTime;
 	}
-	//let cmd = `ffmpeg -y -accurate_seek -ss ${frameTime} -i ${videoFn} -frames:v 1 -q:v 1 -src_range 0 -dst_range 1 ${frameFn.replace(/\.jpg/, '.png')}`;
 	let cmd = `ffmpeg -y -accurate_seek -ss ${frameTime} -i ${videoFn} -frames:v 1 -q:v 1 -src_range 0 -dst_range 1 ${frameFn}`;
-	console.log('cmd:', cmd);
+	console.log('getVideoFrame > cmd:', cmd);
 	let res = await exec(cmd);
-	//cmd = `convert -quality 90 ${frameFn.replace(/\.jpg/, '.png')} ${frameFn}`;
-	//console.log('cmd:', cmd);
-	//res = await exec(cmd);
 	return frameFn;
+};
+
+const convertImage = async (inFn, outFn) => {
+	if(await fileExists(outFn)) return outFn;
+	//cmd = `convert -quality 90 ${inFn} ${outFn}`;
+	cmd = `ffmpeg -y -i ${inFn} -q:v 2 ${outFn}`;
+	console.log('convertImage > cmd:', cmd);
+	res = await exec(cmd);
+	return outFn;
 };
 
 const parsePuzzleDataStr = async str => {
@@ -103,7 +115,7 @@ const parsePuzzleDataStr = async str => {
 	const reCTCPathname = /^\/sudoku\/(.*)/;
 	const rePuzzlePrefix = /^(ctc|scf|fpuzzles|classic)?(.*)/;
 	const reFPuzzPrefix = /^(fpuzzles)(.*)/;
-	const decodeFPuzzles = fpuzzleId => loadFPuzzle.parseFPuzzle(fpuzzleId.replace(rePuzzlePrefix, '$2').replace(/ /g, '+'));
+	const decodeFPuzzles = fpuzzleId => PuzzleZipper.zip(JSON.stringify(loadFPuzzle.parseFPuzzle(fpuzzleId.replace(rePuzzlePrefix, '$2').replace(/ /g, '+'))));
 	const decodeSCF = scfId => PuzzleZipper.zip(JSON.stringify(PuzzleTools.decodeSCF(scfId)));
 	const fetchCTCById = async puzzleId => {
 		let res;
@@ -135,7 +147,7 @@ const parsePuzzleDataStr = async str => {
 		if(location && location !== url) return await parseAsUrl(location);
 		console.log('response.status:', res.status);
 		console.log('response.headers.location:', location);
-		throw new Error('URL not a redirect: ' + url);
+		throw new Error('URL not a valid puzzle: ' + url);
 	};
 	const decodePuzzleStr = async str => {
 		let res = await parseAsUrl(str);
@@ -149,6 +161,7 @@ const parsePuzzleDataStr = async str => {
 };
 
 module.exports = {
+	fileExists,
 	createDataCacher,
 	reYTUrl,
 	ytUrlToId,
@@ -156,5 +169,6 @@ module.exports = {
 	fetchYTDescription,
 	getVideoLength,
 	getVideoFrame,
+	convertImage,
 	parsePuzzleDataStr: parsePuzzleDataStr,
 };
