@@ -198,28 +198,35 @@
 			return start;
 		};
 		return {
-			left: findEdge(0, w - 1, isClear(h, 1, w)),
-			right: findEdge(w - 1, 0, isClear(h, 1, w)),
+			left: findEdge(0, Math.max(h, w * 0.9), isClear(h, 1, w)),
+			right: findEdge(Math.max(h, w * 0.9), 0, isClear(h, 1, w)),
 			top: findEdge(0, h - 1, isClear(w, w, 1)),
 			bottom: findEdge(h - 1, 0, isClear(w, w, 1)),
 		};
 	};
 	const loadVideoFrame = img => {
 		let size = img.naturalHeight;
-		let canvas = Object.assign(document.createElement('canvas'), {width: size, height: size});
-		let ctx = canvas.getContext('2d');
+		let canvas = Object.assign(document.createElement('canvas'), {
+			width: img.naturalWidth,
+			height: img.naturalHeight
+		}), ctx = canvas.getContext('2d');
+		let outCanvas = Object.assign(document.createElement('canvas'), {width: size, height: size}),
+				outCtx = outCanvas.getContext('2d');
 		ctx.drawImage(img, 0, 0);
-		let edges = findBoard(canvas, 170, 0.30);
-		let w = h = Math.min(size, edges.right - edges.left) + 5;
-		ctx.drawImage(img,
-			Math.max(0, edges.left - 5), 0, w, size,
-			0, 0, w, size);
+		let edges1 = findBoard(canvas, 150, 0.25);
+		let w = h = Math.min(size, edges1.right - edges1.left) + 5;
+		ctx.drawImage(img, Math.max(0, edges1.left - 5), 0, w, size, 0, 0, w, size);
 		ctx.fillStyle = '#fff';
 		ctx.fillRect(w, 0, size, size);
-		edges = findBoard(canvas, 170, 0.30);
-		w = h = Math.max(edges.right - edges.left, edges.bottom - edges.top);
-		ctx.drawImage(canvas, edges.left, edges.top, w, h, 0, 0, size, size);
-		return canvas;
+		let edges2 = findBoard(canvas, 150, 0.25);
+		w = h = Math.max(edges2.right - edges2.left, edges2.bottom - edges2.top);
+		outCtx.drawImage(img,
+			Math.max(0, edges1.left - 5) + edges2.left,
+			edges2.top,
+			w, h,
+			0, 0, size, size
+		);
+		return outCanvas;
 	};
 
 // Puzzle
@@ -1055,5 +1062,4 @@
 		catch(err) {
 			console.error(err);
 		}
-
 	};
