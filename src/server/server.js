@@ -1,14 +1,20 @@
 const mkdirp = require('mkdirp');
+const util = require('util');
 const fs = require('fs').promises;
 const path = require('path');
 const fetch = require('node-fetch');
+const exec = util.promisify(require('child_process').exec);
 const {SimpleServer, loadArgs, serveStatic, serveStaticPath} = require('./simpleserver');
 const {
 	fileExists,
-	createDataCacher,
+	createMemoryCacher,
+	createFileCacher,
 	ytUrlToId,
 	fetchYTVideo,
+	fetchYTVideoUrl,
+	fetchYTDuration,
 	fetchYTDescription,
+	fetchVideoFrame,
 	getVideoLength,
 	getVideoFrame,
 	convertImage,
@@ -24,7 +30,7 @@ const descriptionsPath = `${cachePath}descriptions/`;
 const rePathPrefix = /\.[\/\\](?:[^\/\\]+[\/\\])*/;
 
 
-let frameExtractExt = '.png';
+let frameExtractExt = '.jpg';
 let frameStoreExt = '.jpg';
 //TODO: Delete unneeded images
 
@@ -32,8 +38,7 @@ const videoFnToFrameFn = (videoFn, time) => videoFn
 	.replace(/ytvideo_([^\.]+)\..*/, `frame_$1${time ? '_' + time : ''}`)
 	.replace(rePathPrefix, framesPath);
 
-const cachedParsePuzzleDataStr = createDataCacher(`${puzzlesPath}puzzleindex.json`, key => `${puzzlesPath}${key}.ctc`, parsePuzzleDataStr);
-
+const cachedParsePuzzleDataStr = createFileCacher(`${puzzlesPath}puzzleindex.json`, key => `${puzzlesPath}${key}.ctc`, parsePuzzleDataStr);
 
 const handle404 = async (url, request, response) => {
 	response.writeHead(404).end();
@@ -91,6 +96,31 @@ const handleExtractFrame = async (url, request, response) => {
 	}
 };
 
+const handleFetchVideoFrame = async (url, request, response) => {
+	try {
+		const reUrlFrame = /^\/[^/]+\/([^\/]*)(?:\/([^\/]*))?/;
+		let [videoId, frameTime = -25] = url.pathname.match(reUrlFrame).slice(1, 3);
+		console.log('handleFetchVideoFrame > videoId/frameTime:', videoId, frameTime);
+
+		let sourceExt = frameExtractExt, targetExt = frameStoreExt;
+		let frameFn = `${framesPath}frame_${videoId}${frameTime ? '_' + frameTime : ''}${sourceExt}`;
+
+		console.time('fetchVideoFrame');
+		frameFn = await fetchVideoFrame(videoId, frameFn.replace(rePathPrefix, framesPath), frameTime);
+		console.timeEnd('fetchVideoFrame');
+		if(sourceExt !== targetExt) {
+			frameFn = await convertImage(frameFn, frameFn.replace(sourceExt, targetExt));
+		}
+		let frame = frameFn.replace(rePathPrefix, 'frames/');
+		console.log('handleFetchVideoFrame > frame:', frame);
+		response.end(JSON.stringify({frame}));
+	}
+	catch (err) {
+		console.error('Error in handleFetchVideoFrame("%s"):', url, err);
+		response.writeHead(500).end(err);
+	}
+};
+
 const handlePuzzle = async (url, request, response) => {
 	try {
 		let uriStr = decodeURIComponent((url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1]);
@@ -129,6 +159,7 @@ let routes = [
 	{route: /^\/fetchvideo\/(.*)/, handler: handleFetchVideo},
 	{route: /^\/fetchvideodescription\/(.*)/, handler: handleFetchVideoDescription},
 	{route: /^\/extractframe\/(.*)/, handler: handleExtractFrame},
+	{route: /^\/fetchvideoframe\/(.*)/, handler: handleFetchVideoFrame},
 	{route: /^\/puzzle\/(.*)/, handler: handlePuzzle},
 	{route: /^\/frames\/(.*)/, handler: serveStaticPath(`${cachePath}`)},
 	{route: /^\/ctc\/(.*)/, handler: handleCTCProxy},

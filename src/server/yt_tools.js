@@ -18,15 +18,33 @@ const fileExists = async fn => {
 	}
 };
 
-const createDataCacher = (indexFile, getDataFilename, getData) => async key => {
+const createMemoryCacher = getData => {
+	let cache = {};
+	return async (...args) => {
+		let key = args.join('-');
+		let keyHash = md5Digest(key);
+		if(cache[keyHash] !== undefined) return cache[keyHash];
+		try {
+			cache[keyHash] = await getData(...args);
+			return cache[keyHash];
+		}
+		catch(err) {
+			console.error('Error in createMemoryCacher:', err);
+			cache[keyHash] = {error: err.toString()};
+			throw err;
+		}
+	};
+};
+
+const createFileCacher = (indexFile, getDataFilename, getData) => async key => {
 	let index;
-	let keyHash = md5Digest(key);
 	try {
 		index = JSON.parse(await fs.readFile(indexFile));
 	}
 	catch(err) {
 		index = {};
 	}
+	let keyHash = md5Digest(key);
 	if(index[keyHash] !== undefined) {
 		let indexItem = (index[keyHash] || {});
 		if(indexItem.error) throw new Error(indexItem.error);
@@ -43,7 +61,7 @@ const createDataCacher = (indexFile, getDataFilename, getData) => async key => {
 			return data;
 		}
 		catch(err) {
-			console.error('Error in createDataCacher:', err);
+			console.error('Error in createFileCacher:', err);
 			index[keyHash] = {error: err.toString()};
 			await fs.writeFile(indexFile, JSON.stringify(index, null, '\t'), {encoding: 'utf8'});
 			throw err;
@@ -54,6 +72,12 @@ const createDataCacher = (indexFile, getDataFilename, getData) => async key => {
 const reYTUrl = /^(?:https?:\/\/)?(?:(?:www|m)\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((?:\w|-){11})(?:\S+)?$/;
 const ytUrlToId = url => (url.match(reYTUrl) || [])[1];
 
+const durationToSecs = (durStr = '') => {
+	let [s = 0, m = 0, h = 0] = durStr.split(':').reverse() || [];
+	let secs = parseFloat(h) * 3600 + parseFloat(m) * 60 + parseFloat(s);
+	return secs;
+};
+
 const fetchYTVideo = async (videoId, destDir = './', res = 480, quality = 'w') => {
 	let reVideoPrefix = new RegExp(`^ytvideo_${videoId}${res ? '_' + res : ''}${quality ? '_' + quality[0] : ''}`);
 	let fileMatches = (await fs.readdir(destDir)).filter(fn => fn.match(reVideoPrefix));
@@ -61,16 +85,31 @@ const fetchYTVideo = async (videoId, destDir = './', res = 480, quality = 'w') =
 		console.log('Video file found at:', destDir + fileMatches[0]);
 		return destDir + fileMatches[0];
 	}
-	const reDestination = /\[download\]\s+Destination:\s+([^\s]+)/m;
-	const reDownloaded = /\[download\]\s+([^\s]+) has already been downloaded/m;
-	let sortSize = quality.match(/^w/i) ? '+size' : 'size'
+	let sortSize = quality.match(/^w/i) ? '+size' : 'size';
 	let cmd = `yt-dlp --no-mtime -f "bv*" -S "res:${res},${sortSize}" ${videoId} -o "${destDir}ytvideo_%(id)s${res ? '_' + res : ''}${quality ? '_' + quality[0] : ''}.%(ext)s"`;
 	console.log('fetchYTVideo > cmd:', cmd);
 	let {stdout} = await exec(cmd);
+	const reDestination = /\[download\]\s+Destination:\s+([^\s]+)/m;
+	const reDownloaded = /\[download\]\s+([^\s]+) has already been downloaded/m;
 	let videoFn = (stdout.match(reDestination) || stdout.match(reDownloaded) || [])[1];
 	console.log('fetchYTVideo > videoFn:', videoFn);
 	return videoFn;
 };
+
+const fetchYTVideoUrl = async (videoId, res = 480, quality = 'w') => {
+	let sortSize = quality.match(/^w/i) ? '+size' : 'size';
+	let cmd = `yt-dlp -f "bv*" -S "res:${res},${sortSize}" --get-url --no-mtime --skip-download --youtube-skip-dash-manifest ${videoId}`;
+	console.log('fetchYTVideoUrl > cmd:', cmd);
+	return (await exec(cmd)).stdout.replace(/^\s*|\s*$/g, '');
+};
+const cachedFetchYTVideoUrl = createMemoryCacher(fetchYTVideoUrl);
+
+const fetchYTDuration = async (videoId) => {
+	let cmd = `yt-dlp --get-duration --skip-download --youtube-skip-dash-manifest ${videoId}`;
+	console.log('fetchYTDuration > cmd:', cmd);
+	return durationToSecs((await exec(cmd)).stdout);
+};
+const cachedFetchYTDuration = createMemoryCacher(fetchYTDuration);
 
 const fetchYTDescription = async (videoId, destFn) => {
 	if(await fileExists(destFn)) return destFn;
@@ -79,6 +118,26 @@ const fetchYTDescription = async (videoId, destFn) => {
 	console.log('fetchYTDescription > cmd:', cmd);
 	let {stdout} = await exec(cmd);
 	return (stdout.match(reFilename) || [])[1];
+};
+
+const fetchVideoFrame = async (videoId, frameFn, frameTime = 0) => {
+	if(await fileExists(frameFn)) return frameFn;
+	frameTime = parseFloat(frameTime);
+	if(frameTime < 0) {
+		console.time('cachedFetchYTDuration');
+		let duration = await cachedFetchYTDuration(videoId);
+		console.timeEnd('cachedFetchYTDuration');
+		frameTime = duration + frameTime;
+	}
+
+	console.time('cachedFetchYTVideoUrl');
+	let videoUrl = await cachedFetchYTVideoUrl(videoId, 360, 'w');
+	console.timeEnd('cachedFetchYTVideoUrl');
+
+	let cmd = `ffmpeg -y -accurate_seek -ss ${frameTime} -i "${videoUrl}" -frames:v 1 -q:v 1 -src_range 0 -dst_range 1 ${frameFn}`;
+	console.log('fetchVideoFrame > cmd:', cmd);
+	let res = await exec(cmd);
+	return frameFn;
 };
 
 const getVideoLength = async videoFn => {
@@ -162,13 +221,19 @@ const parsePuzzleDataStr = async str => {
 
 module.exports = {
 	fileExists,
-	createDataCacher,
+	createMemoryCacher,
+	createFileCacher,
 	reYTUrl,
 	ytUrlToId,
 	fetchYTVideo,
+	fetchYTVideoUrl,
+	cachedFetchYTVideoUrl,
+	fetchYTDuration,
+	cachedFetchYTDuration,
 	fetchYTDescription,
+	fetchVideoFrame,
 	getVideoLength,
 	getVideoFrame,
 	convertImage,
-	parsePuzzleDataStr: parsePuzzleDataStr,
+	parsePuzzleDataStr,
 };

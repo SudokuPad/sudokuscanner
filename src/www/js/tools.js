@@ -984,10 +984,16 @@
 		const log = (...args) => logElem && (logElem.textContent += args.join(' ') + '\n');
 		if(logElem) logElem.textContent = '';
 
-		const getFrame = async (videoName, frameTime) => {
+		const __getFrame = async (videoName, frameTime) => {
 			log(`Get frame at ${frameTime} from: ${videoName}`); timer();
 			let img = await PuzzleTools.urlToImg((await fetchJson(`/extractframe/${videoName}/${frameTime}`)).frame);
 			log(`Getting frame at ${frameTime} from: ${videoName} (${timer()}ms)`);
+			return img;
+		};
+		const getFrame = async (videoId, frameTime) => {
+			log(`Get frame at ${frameTime} from: ${videoId}`); timer();
+			let img = await PuzzleTools.urlToImg((await fetchJson(`/fetchvideoframe/${videoId}/${frameTime}`)).frame);
+			log(`Getting frame at ${frameTime} from: ${videoId} (${timer()}ms)`);
 			return img;
 		};
 
@@ -1005,7 +1011,7 @@
 
 		timer('total');
 		try {
-
+			/*
 			log('Fetching video:', videoId);
 			timer();
 			let videoName = (await fetchJson(`/fetchvideo/${videoId}`)).video;
@@ -1013,6 +1019,17 @@
 			
 			let blankFrameImg = await getFrame(videoName, 120);
 			let solvedFrameImg = await getFrame(videoName, -25);
+			*/
+
+			log('Fetching frames:', videoId);
+			console.time('frame120');
+			let blankFrameImg = await getFrame(videoId, 120);
+			console.timeEnd('frame120');
+			console.time('frame-25');
+			let solvedFrameImg = await getFrame(videoId, -25);
+			console.timeEnd('frame-25');
+			timer('frames');
+			log(`Fetch frames (${timer('frames')}ms)`);
 
 			let puzzles = await loadPuzzleUrls(videoId);
 
