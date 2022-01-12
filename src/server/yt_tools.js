@@ -69,6 +69,8 @@ const createFileCacher = (indexFile, getDataFilename, getData) => async key => {
 	}
 };
 
+// TODO: Create "simple" file cacher without index file and digests, but explicit keys
+
 const reYTUrl = /^(?:https?:\/\/)?(?:(?:www|m)\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((?:\w|-){11})(?:\S+)?$/;
 const ytUrlToId = url => (url.match(reYTUrl) || [])[1];
 
@@ -120,23 +122,37 @@ const fetchYTDescription = async (videoId, destFn) => {
 	return (stdout.match(reFilename) || [])[1];
 };
 
+const fetchYTVideoInfo = async (videoId, res = 480, quality = 'w') => {
+	const reSplitVideoInfo = /^([^\n]+?)\n((?:.|\n)+)\n([^\n]+?)\n$/m;
+	let sortSize = quality.match(/^w/i) ? '+size' : 'size';
+	let cmd = `yt-dlp -f "bv*" -S "res:${res},${sortSize}" --get-duration --get-url --get-description --no-mtime --skip-download --youtube-skip-dash-manifest ${videoId}`;
+	let {stdout} = await exec(cmd);
+	let [_, videoUrl, description, durationStr] = stdout.match(reSplitVideoInfo);
+	return {
+		videoUrl,
+		duration: durationToSecs(durationStr),
+		description
+	};
+};
+const cachedFetchYTVideoInfo = (() => {
+	const reKeyParts = /^(.*)\-([^-]+)\-([^-]+)$/;
+	const keySplit = handler => key => {
+		let [_, videoId, res, quality] = key.match(reKeyParts);
+		return handler(videoId, res, quality);
+	};
+	const keyJoin = handler => (...args) => handler(args.join('-'));
+	return keyJoin(createMemoryCacher(keySplit(fetchYTVideoInfo)));
+})();
+
 const fetchVideoFrame = async (videoId, frameFn, frameTime = 0) => {
 	if(await fileExists(frameFn)) return frameFn;
+	let res = 360, quality = 'w';
+	let {videoUrl, duration, description} = await cachedFetchYTVideoInfo(videoId, res, quality);
 	frameTime = parseFloat(frameTime);
-	if(frameTime < 0) {
-		console.time('cachedFetchYTDuration');
-		let duration = await cachedFetchYTDuration(videoId);
-		console.timeEnd('cachedFetchYTDuration');
-		frameTime = duration + frameTime;
-	}
-
-	console.time('cachedFetchYTVideoUrl');
-	let videoUrl = await cachedFetchYTVideoUrl(videoId, 360, 'w');
-	console.timeEnd('cachedFetchYTVideoUrl');
-
+	if(frameTime < 0) frameTime = duration + frameTime;
 	let cmd = `ffmpeg -y -accurate_seek -ss ${frameTime} -i "${videoUrl}" -frames:v 1 -q:v 1 -src_range 0 -dst_range 1 ${frameFn}`;
 	console.log('fetchVideoFrame > cmd:', cmd);
-	let res = await exec(cmd);
+	await exec(cmd);
 	return frameFn;
 };
 
@@ -231,6 +247,8 @@ module.exports = {
 	fetchYTDuration,
 	cachedFetchYTDuration,
 	fetchYTDescription,
+	fetchYTVideoInfo,
+	cachedFetchYTVideoInfo,
 	fetchVideoFrame,
 	getVideoLength,
 	getVideoFrame,

@@ -14,6 +14,8 @@ const {
 	fetchYTVideoUrl,
 	fetchYTDuration,
 	fetchYTDescription,
+	fetchYTVideoInfo,
+	cachedFetchYTVideoInfo,
 	fetchVideoFrame,
 	getVideoLength,
 	getVideoFrame,
@@ -96,18 +98,28 @@ const handleExtractFrame = async (url, request, response) => {
 	}
 };
 
+const handleFetchVideoInfo = async (url, request, response) => {
+	try {
+		let videoId = (url.pathname.match(/^\/[^/]+\/(.*)/) || [])[1];
+		console.log('handleFetchVideoInfo > videoId:', videoId);
+		let res = 360, quality = 'w';
+		let videoInfo = await cachedFetchYTVideoInfo(videoId, res, quality);
+		response.end(JSON.stringify(videoInfo));
+	}
+	catch (err) {
+		console.error('Error in handleFetchVideoInfo("%s"):', url, err);
+		response.writeHead(500).end(err);
+	}
+};
+
 const handleFetchVideoFrame = async (url, request, response) => {
 	try {
 		const reUrlFrame = /^\/[^/]+\/([^\/]*)(?:\/([^\/]*))?/;
 		let [videoId, frameTime = -25] = url.pathname.match(reUrlFrame).slice(1, 3);
 		console.log('handleFetchVideoFrame > videoId/frameTime:', videoId, frameTime);
-
 		let sourceExt = frameExtractExt, targetExt = frameStoreExt;
 		let frameFn = `${framesPath}frame_${videoId}${frameTime ? '_' + frameTime : ''}${sourceExt}`;
-
-		console.time('fetchVideoFrame');
-		frameFn = await fetchVideoFrame(videoId, frameFn.replace(rePathPrefix, framesPath), frameTime);
-		console.timeEnd('fetchVideoFrame');
+		frameFn = await fetchVideoFrame(videoId, frameFn, frameTime);
 		if(sourceExt !== targetExt) {
 			frameFn = await convertImage(frameFn, frameFn.replace(sourceExt, targetExt));
 		}
@@ -160,6 +172,7 @@ let routes = [
 	{route: /^\/fetchvideodescription\/(.*)/, handler: handleFetchVideoDescription},
 	{route: /^\/extractframe\/(.*)/, handler: handleExtractFrame},
 	{route: /^\/fetchvideoframe\/(.*)/, handler: handleFetchVideoFrame},
+	{route: /^\/fetchvideoinfo\/(.*)/, handler: handleFetchVideoInfo},
 	{route: /^\/puzzle\/(.*)/, handler: handlePuzzle},
 	{route: /^\/frames\/(.*)/, handler: serveStaticPath(`${cachePath}`)},
 	{route: /^\/ctc\/(.*)/, handler: handleCTCProxy},

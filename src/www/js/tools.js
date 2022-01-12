@@ -19,6 +19,7 @@
 		res = await res.json();
 		return res;
 	};
+	const removeElems = selector => Object.assign(document.createDocumentFragment(), {textContent: ' '}).firstChild.replaceWith(...document.querySelectorAll(selector));
 	const levenshteinDistance = (str1 = '', str2 = '') => {
 		const track = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
 		for (let i = 0; i <= str1.length; i += 1) {
@@ -69,7 +70,6 @@
 		let f = (n, k = (n + h / 30) % 12) => v - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
 		return [f(0), f(8), f(4)];
 	};
-
 	function rgb2xyz(rgb) {
 		var r = rgb[0] / 255,
 				g = rgb[1] / 255,
@@ -141,7 +141,6 @@
 
 		return [h, s * 100, l * 100];
 	}
-
 	const luminance = rgb => {
 		var a = rgb.map(v => {
 			v /= 255;
@@ -169,10 +168,12 @@
 		))
 		.filter(res => res.puzzle)
 		.map(res => JSON.parse(PuzzleZipper.unzip(res.puzzle)));
-	const fetchVideoDescription = async videoId => {
-		console.log('fetchVideoDescription > videoId:', videoId);
-		console.log(`/fetchvideodescription/${videoId}`);
-		return (await fetchJson(`/fetchvideodescription/${videoId}`)).description;
+	const fetchVideoInfo = async videoId => {
+		console.log('fetchVideoInfo("%s");');
+		console.time('fetchVideoInfo');
+		let videoInfo = await fetchJson(`/fetchvideoinfo/${videoId}`);
+		console.timeEnd('fetchVideoInfo');
+		return videoInfo;
 	};
 	const findBoard = (canvas, threshold1 = 200, threshold2 = 0.04) => {
 		//console.info('findBoard(canvas, %s, %s);', threshold1, threshold2);
@@ -982,7 +983,9 @@
 		console.log('  videoId:', videoId);
 
 		const log = (...args) => logElem && (logElem.textContent += args.join(' ') + '\n');
+		// Clear elems
 		if(logElem) logElem.textContent = '';
+		removeElems('#app img, #app canvas');
 
 		const __getFrame = async (videoName, frameTime) => {
 			log(`Get frame at ${frameTime} from: ${videoName}`); timer();
@@ -998,11 +1001,10 @@
 		};
 
 		const loadPuzzleUrls = async videoId => {
-			log('Fetching puzzles from video description:', videoId);
+			log('Fetching puzzle references from video:', videoId);
 			timer();
-			console.warn('loadPuzzle > videoId:', videoId);
-			let description = await fetchVideoDescription(videoId);
-			let puzzleUrls = getPuzzleUrlsFromDescription(description);
+			let videoInfo = await fetchVideoInfo(videoId);
+			let puzzleUrls = getPuzzleUrlsFromDescription(videoInfo.description);
 			console.log('  puzzleUrls:\n%s', puzzleUrls.join('\n'));
 			let puzzles = await getPuzzles(puzzleUrls);
 			log(`loadPuzzleUrls (${timer()}ms)`);
@@ -1046,6 +1048,7 @@
 			log(`Solutions found:`, sols.length);
 			let sol = sols[0];
 			log(`Find solution (${timer()}ms)`);
+			log(`Total time: ${timer('total')}ms`);
 			log('Solution:');
 			log((sol.match(/(.{9})/g) || []).join('\n'));
 		}
@@ -1053,5 +1056,4 @@
 			console.error(err);
 		}
 
-		log(`Total time: ${timer('total')}ms`);
 	};
