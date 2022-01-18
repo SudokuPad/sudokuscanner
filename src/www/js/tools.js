@@ -1098,6 +1098,8 @@
 	const processVideo = async (videoUrl, correctSol = '', logElem) => {
 		console.log('processVideo(videoUrl, correctSol);');
 
+		const blankFrameTime = 120, solvedFrameTime = -40;
+
 		let videoId = ytUrlToId(videoUrl);
 		console.log('  videoUrl:', videoUrl);
 		console.log('  correctSol:', correctSol);
@@ -1145,12 +1147,12 @@
 			*/
 
 			log('Fetching frames:', videoId);
-			console.time('frame120');
-			let blankFrameImg = await getFrame(videoId, 120);
-			console.timeEnd('frame120');
-			console.time('frame-40');
-			let solvedFrameImg = await getFrame(videoId, -40);
-			console.timeEnd('frame-40');
+			console.time('blank frame');
+			let blankFrameImg = await getFrame(videoId, blankFrameTime);
+			console.timeEnd('blank frame');
+			console.time('solved frame');
+			let solvedFrameImg = await getFrame(videoId, solvedFrameTime);
+			console.timeEnd('solved frame');
 			timer('frames');
 			log(`Fetch frames (${timer('frames')}ms)`);
 
