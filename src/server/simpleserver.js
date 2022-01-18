@@ -36,12 +36,18 @@ const SimpleServer = (() => {
 		return allowedOrigins.some(origin => originUrl.host.match(origin));
 	};
 	SS.serveStatic = (filePath, {message, code = 200, headers = {}} = {}) => (url, request, response) => {
-		let stat = fs.statSync(filePath);
-		response.writeHead(code, Object.assign({
-			'Content-Type': 'text/html; charset=UTF-8',
-			'Content-Length': stat.size
-		}, headers));
-		fs.createReadStream(filePath).pipe(response);
+		try {
+			let stat = fs.statSync(filePath);
+			response.writeHead(code, Object.assign({
+				'Content-Type': 'text/html; charset=UTF-8',
+				'Content-Length': stat.size
+			}, headers));
+			fs.createReadStream(filePath).pipe(response);
+		}
+		catch (err) {
+			response.writeHead(404);
+			response.end();
+		}
 	};
 	SS.serveHTML = ({message = 'Ok', code = 200, html = '', headers = {}} = {}) => (url, request, response) => {
 		response.statusCode = code;
