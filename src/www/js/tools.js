@@ -40,6 +40,10 @@
 		}
 		return track[str2.length][str1.length];
 	};
+	const normRatio = (a, b) => {
+		let r = a / b;
+		return r >= 1 ? r : 1 / r;
+	};
 	const getStats = (list = []) => {
 		let count = list.length, min = Number.MAX_SAFE_INTEGER, max = Number.MIN_SAFE_INTEGER, sum = 0, se = 0;
 		let i, n, s;
@@ -60,6 +64,8 @@
 		let variance = s / count;
 				return {count, sum, min, max, mean, mse, variance};
 	};
+
+// Image
 	const rgb2hsv = ([r, g, b]) => {
 		let v = Math.max(r, g, b), c = v - Math.min(r, g, b);
 		let h = c && ((v === r) ? (g - b) / c : ((v === g) ? 2 + (b - r) / c : 4 + (r - g) / c)); 
@@ -150,6 +156,84 @@
 		});
 		return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
 	};
+	const fetchImg = async url => {
+		let res = await fetch(url, {method: 'HEAD'});
+		if(res.status !== 200) throw new Error({status: res.status, statusText: res.statusText, response: res});
+		return await PuzzleTools.urlToImg(url);
+	};
+	const imgToCanvas = img => {
+		let canvas = Object.assign(document.createElement('canvas'), {width: img.naturalWidth, height: img.naturalHeight});
+		canvas.getContext('2d').drawImage(img, 0, 0);
+		return canvas;
+	};
+	const line = (ctx, x1, y1, x2, y2, color) => {
+		ctx.save();
+		ctx.translate(0.5, 0.5);
+		ctx.strokeStyle = color;//'#0f0a';
+		ctx.beginPath();
+		ctx.moveTo(x1, y1);
+		ctx.lineTo(x2, y2);
+		ctx.stroke();
+		ctx.restore();
+	};
+	const cross = (ctx, x, y, size, color) => {
+		ctx.save();
+		ctx.translate(0.5, 0.5);
+		ctx.strokeStyle = color;//'#0f0a';
+		ctx.beginPath();
+		ctx.moveTo(x - size, y - size); ctx.lineTo(x + size, y + size);
+		ctx.moveTo(x + size, y - size); ctx.lineTo(x - size, y + size);
+		ctx.stroke();
+		ctx.restore();
+	};
+	const drawVLines = (ctx, lines, color = '#000', lineWidth = 1) => {
+		let {height} = ctx.canvas;
+		ctx.save();
+		ctx.translate(0.5, 0.5);
+		ctx.strokeStyle = color;
+		ctx.lineWidth = lineWidth;
+		ctx.beginPath();
+		lines.forEach(i => { ctx.moveTo(i, 0); ctx.lineTo(i, height - 1); });
+		ctx.stroke();
+		ctx.restore();
+	};
+	const drawHLines = (ctx, lines, color = '#000', lineWidth = 1) => {
+		let {width} = ctx.canvas;
+		ctx.save();
+		ctx.translate(0.5, 0.5);
+		ctx.strokeStyle = color;
+		ctx.lineWidth = lineWidth;
+		ctx.beginPath();
+		lines.forEach(i => { ctx.moveTo(0, i); ctx.lineTo(width - 1, i); });
+		ctx.stroke();
+		ctx.restore();
+	};
+	const drawBBox = (ctx, bbox, color) => {
+		ctx.save();
+		ctx.translate(0.5, 0.5);
+		ctx.fillStyle = color;
+		ctx.fillRect(bbox.left, bbox.top, bbox.width, bbox.height);
+		ctx.restore();
+	};
+	const filterByLAB = (iData, comp, thres) => {
+		let d = iData.data, dlen = d.length;
+		for(var i = 0; i < dlen; i += 4) {
+			let lab = rgb2lab([d[i+0], d[i+1], d[i+2]]);
+			let diff = [
+				Math.abs(comp[0] - lab[0]),
+				Math.abs(comp[1] - lab[1]),
+				Math.abs(comp[2] - lab[2])
+			];
+			if(
+				!(Math.abs(comp[0] - lab[0]) < thres[0] && Math.abs(comp[1] - lab[1]) < thres[0] && Math.abs(comp[2] - lab[2]) < thres[0])
+				) {
+				d[i+0] = d[i+1] = d[i+2] = 255;
+			}
+			else {
+				d[i+0] = d[i+1] = d[i+2] = (diff[0] + diff[1] + diff[2]) / 3 * 20 - 100;
+			}
+		}
+	};
 
 // Video
 	const reYTUrl = /^(?:https?:\/\/)?(?:(?:www|m)\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((?:\w|-){11})(?:\S+)?$/;
@@ -176,7 +260,6 @@
 		return videoInfo;
 	};
 	const findBoard = (canvas, threshold1 = 200, threshold2 = 0.04) => {
-		//console.info('findBoard(canvas, %s, %s);', threshold1, threshold2);
 		let ctx = canvas.getContext('2d'),
 				w = canvas.width,
 				h = canvas.height,
@@ -205,6 +288,7 @@
 		};
 	};
 	const loadVideoFrame = img => {
+		/*
 		let size = img.naturalHeight;
 		let canvas = Object.assign(document.createElement('canvas'), {
 			width: img.naturalWidth,
@@ -226,7 +310,17 @@
 			w, h,
 			0, 0, size, size
 		);
+		console.log('outCanvas:', outCanvas);
 		return outCanvas;
+		*/
+		let bboxes = findGridBBox(imgToCanvas(img));
+		console.log('bboxes:', bboxes);
+		let edges = bboxes[0];
+		console.log('edges:', edges);
+		let size = edges.width;
+		let canvas = Object.assign(document.createElement('canvas'), {width: size, height: size}), ctx = canvas.getContext('2d');
+		ctx.drawImage(img, edges.left, edges.top, edges.width, edges.height, 0, 0, size, size);
+		return canvas;
 	};
 
 // Puzzle
@@ -518,7 +612,8 @@
 			//let val = (rgb[0] ) > threshold * 255 ? 255 : 0;
 
 			let hsl = rgb2hsl(rgb);
-			let val = (hsl[2]) > threshold * 100 ? 255 : 0;
+			let thresVal = hsl[2] / 100;
+			let val = thresVal > threshold ? 255 : thresVal * thresVal * 255;
 			//let val = hsl[2] > 65 ? 255 : 0;
 			d[i + 0] = d[i + 1] = d[i + 2] = val;
 			//d[i + 3] = 255;
@@ -544,6 +639,12 @@
 		ctx.globalCompositeOperation = 'source-over';
 		invertCtx(ctx);
 		return ctx;
+	};
+	const createDiffCanvas = (blankCanvas, filledCanvas) => {
+		let {width, height} = blankCanvas;
+		let canvas = Object.assign(document.createElement('canvas'), {width, height}), ctx = canvas.getContext('2d')
+		drawFrameDiff(ctx, blankCanvas, filledCanvas);
+		return canvas;
 	};
 	const drawOption = async (ctx, props = {}) => {
 		let {width, height} = ctx.canvas;
@@ -702,11 +803,9 @@
 	const logSol = (label, sol, correctSol) => console.log(label, sol.join(''), correctSol ? levenshteinDistance(sol.join(''), correctSol) : '');
 	const completeSolution = async (firstSol, correctSol = [], improveSolFunc) => {
 		console.time('completeSolution');
-
 		logSol('correctSol:', correctSol, correctSol);
 		console.log('          :', correctSol.map((d, i) => d === firstSol[i] ? '√' : ' ').join(''));
 		logSol('  firstSol:', firstSol, correctSol);
-
 		let partialSol = [...firstSol];
 		let sols;
 		for(var i = 0; i < 81; i++) {
@@ -724,7 +823,6 @@
 			loadSol(sols[0]);
 		}
 		console.timeEnd('completeSolution');
-
 		return sols;
 	};
 
@@ -784,26 +882,35 @@
 	};
 
 	const testScannerOcrPerCell = async ({canvas, correctSol, rows = 9, cols = 9, givens = []}) => {
-		let inCtx = canvas.getContext('2d');
-		let {width, height} = canvas, w = (width / cols), h = (height / rows);
+		let ctx = canvas.getContext('2d');
+		let {width, height} = canvas;
+
+		//document.body.appendChild(cellCanvas);
+		let iData = ctx.getImageData(0, 0, width, height);
+		//filterByLAB(iData, [40, 10, -45], [35, 25, 30]);
+		//filterByLAB(iData, [40, 10, -40], [30, 20, 40]);
+		filterByLAB(iData, [40, 5, -35], [30, 10, 20]);
+		ctx.putImageData(iData, 0, 0);
+
+		// Extract digits and remove grid lines
+		let w = (width / cols), h = (height / rows);
 		let cellCanvas = Object.assign(document.createElement('canvas'), {width: w, height: h});
 		let cellCtx = cellCanvas.getContext('2d');
-
-		inCtx.fillStyle = '#fff';
+		ctx.fillStyle = '#fff';
 		for(let i = 0; i < rows * cols; i++) {
 			let x = (i % cols) * w, y = Math.floor(i / cols) * h, x0 = 0, y0 = 0;
-			x0 = 0.15 * w;
+			x0 = 0.2 * w;
 			y0 = 0.15 * h;
 			let _w = w - 2 * x0;
 			let _h = h - 2 * y0;
 			cellCtx.drawImage(canvas, x + x0, y + y0, _w, _h, x0, y0, _w, _h);
-			if(givens[i] !== ' ') {
-				invertCtx(cellCtx);
-			}
-			contrastifyCtx(cellCtx);
-			inCtx.fillRect(x, y, w, h);
-			inCtx.drawImage(cellCanvas, x, y);
+			//if(givens[i] !== ' ') invertCtx(cellCtx);
+			//contrastifyCtx(cellCtx);
+			ctx.fillRect(x, y, w, h);
+			ctx.drawImage(cellCanvas, x, y);
 		}
+		
+		
 		let [sol, digits, scoreOrder] = await findSolByOcr({rows, cols, image: canvas, givens});
 		console.log('sol:', sol.join(''));
 		console.log('digits:', digits);
@@ -958,18 +1065,25 @@
 	const findSol = async (blankFrameImg, solvedFrameImg, correctSol = []) => {
 		if(typeof correctSol === 'string') correctSol = correctSol.split('');
 		let appElem = document.getElementById('app');
+		
+		console.time('loadVideoFrame x2');
 		let blankFrameCanvas = loadVideoFrame(blankFrameImg);
 		let solvedFrameCanvas = loadVideoFrame(solvedFrameImg);
-		let frameWH = {width: blankFrameCanvas.width, height: blankFrameCanvas.height};
-		let inCanvas = Object.assign(document.createElement('canvas'), frameWH), inCtx = inCanvas.getContext('2d')
+		console.timeEnd('loadVideoFrame x2');
+
+		//let inCanvas = createDiffCanvas(blankFrameCanvas, solvedFrameCanvas);
+		let inCanvas = solvedFrameCanvas;
+
+		appElem.appendChild(blankFrameImg);
+		appElem.appendChild(solvedFrameImg);
+		let div = document.createElement('div');
+		appElem.appendChild(div);
+		div.appendChild(blankFrameCanvas);
+		div.appendChild(solvedFrameCanvas);
+		div.appendChild(inCanvas);
+
 		let givens = getGivens();
 		console.log('givens:', givens.join(''));
-
-		appElem.appendChild(solvedFrameImg);
-		
-		appElem.appendChild(inCanvas);
-
-		drawFrameDiff(inCtx, blankFrameCanvas, solvedFrameCanvas);
 
 		//await testScannerOcr({
 		return await testScannerOcrPerCell({
@@ -1063,3 +1177,739 @@
 			console.error(err);
 		}
 	};
+
+// Testing
+	const findGridBBox1 = (img => {
+		const iDataToU8 = iData => {
+			let {width, height} = iData;
+			let imgU8 = new jsfeat.matrix_t(width, height, jsfeat.U8C1_t);
+			jsfeat.imgproc.grayscale(iData.data, width, height, imgU8);
+			return imgU8;
+		};
+		const u8ToIData = (ctx, iData, imgU8) => {
+			var data_u32 = new Uint32Array(iData.data.buffer);
+			var alpha = (0xff << 24);
+			var i = imgU8.cols * imgU8.rows, pix = 0;
+			while(--i >= 0) {
+				pix = imgU8.data[i];
+				data_u32[i] = alpha | (pix << 16) | (pix << 8) | pix;
+			}
+			ctx.putImageData(iData, 0, 0);
+		};
+		const gausianBlur = (imgU8, opts) => {
+			var r = opts.blur_radius|0;
+			var kernel_size = (r + 1) << 1;
+			jsfeat.imgproc.gaussian_blur(imgU8, imgU8, kernel_size, 0);
+		};
+		const cannyEdgeDetection = (imgU8, opts) => {
+			jsfeat.imgproc.canny(imgU8, imgU8, opts.low_threshold|0, opts.high_threshold|0);
+		};
+		const calcHFreqs = (iData, threshold) => {
+			let {width, height} = iData;
+			let d = iData.data, dlen = d.length, size = width, scale = height;
+			let freqs = [];
+			for(var i = 0; i < size; i++) freqs[i] = 0;
+			for(var i = 0; i < dlen; i += 4) {
+				let x = (i / 4) % width, val = (d[i+0] + d[i+1] + d[i+2]) <= threshold * 3 ? 1 : 0;
+				freqs[x] += val;
+			}
+			for(var i = 0; i < size; i++) freqs[i] = freqs[i] / scale;
+			return freqs;
+		};
+		const calcVFreqs = (iData, threshold) => {
+			let {width, height} = iData;
+			let d = iData.data, dlen = d.length, size = height, scale = width;
+			let freqs = [];
+			for(var i = 0; i < size; i++) freqs[i] = 0;
+			for(var i = 0; i < dlen; i += 4) {
+				let y = Math.floor((i / 4) / width), val = (d[i+0] + d[i+1] + d[i+2]) < threshold * 3 ? 1 : 0;
+				//console.log(i, y, val);
+				freqs[y] += val;
+			}
+			//console.log('size:', size);
+			//console.log('scale:', scale);
+			//console.log('freqs:', freqs);
+			for(var i = 0; i < size; i++) freqs[i] = freqs[i] / scale;
+			//console.log('freqs:', freqs);
+			return freqs;
+		};
+		const __calcXYFreqs = (iData, threshold) => {
+			let xfreq = [], yfreq = [];
+			for(var i = 0; i < width; i++) xfreq[i] = 0;
+			for(var i = 0; i < height; i++) yfreq[i] = 0;
+			for(var i = 0; i < dl; i += 4) {
+				var x = (i / 4) % width, y = Math.floor((i / 4) / width);
+				let val = ((d[i+0] + d[i+1] + d[i+2]) / 3) < threshold ? 1 : 0;
+				xfreq[x] += val;
+				yfreq[y] += val;
+			}
+			for(var i = 0; i < width; i++) xfreq[i] = xfreq[i] / width;
+			for(var i = 0; i < height; i++) yfreq[i] = yfreq[i] / height;
+			return [xfreq, yfreq];
+		};
+		const __findStartEnd = (freqs, threshold) => {
+			let start = 0, end = freqs.length - 1;
+			while(freqs[start++] < threshold && start < end);
+			//console.log('start:', start);
+			//console.log('end:', end, freqs[end], freqs[end] < threshold);
+			while(freqs[end--] < threshold && end > start);
+			//console.log('start/end:', start, end);
+			return [start, end];
+		};
+		const freqsToLines = (freqs, threshold) => {
+			//console.log('freqsToLines:', freqs, threshold);
+			let len = freqs.length, lines = [];
+			for(let i = 0; i < len; i++) {
+				if(freqs[i] > threshold) lines.push(i);
+			}
+			return lines;
+		};
+		const applyEdgeFilter = (ctx, opts) => {
+			let iData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+			let imgU8 = iDataToU8(iData);
+			//jsfeat.imgproc.equalize_histogram(imgU8, imgU8);
+			cannyEdgeDetection(imgU8, opts);
+			gausianBlur(imgU8, opts);
+			u8ToIData(ctx, iData, imgU8);
+			invertCtx(ctx);
+		};
+		const clearCtx = (ctx, color = '#fff') => {
+			ctx.fillStyle = color;
+			ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+		};
+		const ctxToVLines = (ctx, threshold1, threshold2) => {
+			let iData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+			let freqs = calcHFreqs(iData, threshold1);
+			return freqsToLines(freqs, threshold2);
+		};
+		const findGridBBox = img => {
+			let threshold1 = 220, threshold2 = 0.6;
+			let fuzzFactor = 3;
+			let opts = {
+				blur_radius: 0.5, // 0 - 4
+				low_threshold: 70, // 1 - 127
+				high_threshold: 100, // 1 - 127
+			};
+			const calcDists = (lines, min, max) => {
+				let dists = {};
+				for(var i = 0; i < lines.length; i++) {
+					for(var ii = 0; ii < lines.length; ii++) {
+						let d = Math.abs(lines[i] - lines[ii]);
+						if(d >= min && d <= max) {
+							dists[d] = dists[d] || [];
+							dists[d].push([i, ii]);
+						}
+					}
+				}
+				return dists;
+			};
+			const __distHarmonics = d => {
+				d = parseInt(d);
+				return [d * 1, d * 2, d * 3, d * 4, d * 5, d * 6, d * 7, d * 8, d * 9];
+			};
+			const __getCountAtDist = (d, fuzz = 0) => {
+				let count = (dists[d] || []).length;
+				while(--fuzz > 0) count += (dists[d - fuzz] || []).length + (dists[d + fuzz] || []).length;
+				return count;
+			};
+			const __getLinesAtDist = (d, fuzz = 0) => {
+				let mappings = (dists[d] || []);
+				while(--fuzz > 0) mappings = [...mappings, ...(dists[d - fuzz] || []), ...(dists[d + fuzz] || [])]
+				mappings = [...mappings.map(([i, ii]) => lines[i]), ...mappings.map(([i, ii]) => lines[ii])];
+				mappings = [...new Set(mappings)];
+				return mappings;
+			};
+			const __getLinesAtHarmonics = (d, fuzz = 0) => arrFlatUniqSorted(
+				distHarmonics(d).map((dh, i) => getLinesAtDist(dh, fuzz)));
+			const __getLinesAtRelativeDist = (line, d, fuzz = 0) => {
+				let res = [lines.indexOf(line - d) , lines.indexOf(line + d)];
+				while(--fuzz > 0) res.push(
+					lines.indexOf(line - d - fuzz),
+					lines.indexOf(line - d + fuzz),
+					lines.indexOf(line + d - fuzz),
+					lines.indexOf(line + d + fuzz)
+				);
+				return res.filter(i => i !== -1).map(i => lines[i]);
+			};
+			const getLinesAtRelativePos = (lines, pos, fuzz = 0) => {
+				pos = Math.round(pos);
+				let res = [lines.indexOf(pos)];
+				while(fuzz-- > 0) res.push(lines.indexOf(pos - fuzz - 1), lines.indexOf(pos + fuzz + 1));
+				return res.filter(i => i !== -1).map(i => lines[i]);
+			};
+			const __getLinesAtRelativeHarmonics1 = (line, d, fuzz = 0) => {
+				distHarmonics(d)
+					.forEach(dh => {
+						console.log('    :', dh, getLinesAtRelativeDist(line, dh, fuzz));
+					});
+			};
+			const __getLinesAtRelativeHarmonics = (line, d, fuzz = 0) => arrFlatUniqSorted(
+				distHarmonics(d).map((dh, i) => getLinesAtRelativeDist(line, dh, fuzz)));
+			const mergeLines = (lines, fuzz) => {
+				let groups = [];
+				lines.forEach(line => {
+					let group = groups.find(({avg, lines}) => Math.abs(avg - line) <= fuzz);
+					if(group === undefined) {
+						groups.push({avg: line, lines: [line]});
+					}
+					else {
+						group.lines.push(line);
+						group.avg = group.lines.reduce((sum , l) => sum + l, 0) / group.lines.length;
+					}
+				});
+				return groups.map(({avg}) => avg);
+			};
+			const normaliseLines = (lines, d) => {
+				let offset = Math.round(lines.reduce((sum, n) => sum + n % d, 0) / lines.length);
+				let normLines = [];
+				console.log('normaliseLines:', offset, d);
+				lines.forEach(line => 
+					console.log(
+						//line / d,
+						//line % d,
+						Math.round(line % d),
+						Math.floor(line / d),
+						lines.reduce((sum, l) => sum += l / d, 0) / lines.length,
+
+						Math.abs(line / d - lines.reduce((sum, l) => sum += l / d, 0) / lines.length),
+
+						Math.max(0, Math.round(line % d)) + Math.floor(line / d) * d,
+						Math.max(0, Math.round(line % d)),
+						line, 
+
+						//Math.round((line - offset) / d),
+						//offset + Math.round((line - offset) / d) * d
+					)
+				);
+				
+				return [...new Set(lines.map(line => offset + Math.round((line - offset) / d) * d))];
+			};
+			const getGridStarts = (lines, dists) => Object.keys(dists)
+				.map(d => parseInt(d))
+				.sort((a, b) => a - b)
+				.map(d => {
+					let foundLines = lines
+						.filter(line => {
+							let reLines = [];
+							for(var h = 9; h >= 1; h--) {
+							//for(var h = 5; h >= -4; h--) {
+								let reLines = getLinesAtRelativePos(lines, line + d * h, fuzzFactor);
+								if(reLines.length === 0) return false;
+							}
+							return true;
+						});
+					return [d, mergeLines(foundLines, fuzzFactor)];
+				})
+				.filter(([d, start]) => start.length > 0)
+				.sort((a, b) => a[1][0] - b[1][0]);
+			const findGridLeftRight = img => {
+				let imgU8, lines, dists;
+				let {naturalWidth: width, naturalHeight: height} = img;
+				let minDist = height / 15, maxDist = height;
+				let canvas = Object.assign(document.createElement('canvas'), {width, height}), ctx = canvas.getContext('2d');
+				document.body.appendChild(canvas);
+				ctx.drawImage(img, 0, 0);
+				applyEdgeFilter(ctx, opts);
+				lines = ctxToVLines(ctx, threshold1, threshold2);
+				clearCtx(ctx);
+				drawVLines(ctx, lines);
+				applyEdgeFilter(ctx, opts);
+				lines = ctxToVLines(ctx, threshold1, threshold2);
+				clearCtx(ctx);
+				lines.forEach(x => ctx.drawImage(img,
+					Math.max(0, x - 1 * minDist), 0, 2 * minDist, height,
+					Math.max(0, x - 1 * minDist), 0, 2 * minDist, height
+				));
+				applyEdgeFilter(ctx, opts);
+				lines = ctxToVLines(ctx, threshold1, threshold2);
+				drawVLines(ctx, lines, '#0ff');
+				dists = calcDists(lines, minDist, maxDist);
+				let gridStarts = getGridStarts(lines, dists);
+				// TODO: Handle multiple candidates
+				let [gridSize, [gridStart]] = gridStarts[0];
+				drawVLines(ctx, [...Array(10).keys()].map(i => Math.round(gridStart + gridSize * i)), '#f00', 1);
+				console.log({left: Math.round(gridStart), right: Math.round(gridStart + 9 * gridSize), canvas});
+				//throw new Error();
+				return {left: Math.round(gridStart), right: Math.round(gridStart + 9 * gridSize), canvas};
+			};
+			const scanForGridLines = (img, imgLeft, imgRight) => {
+				let {naturalWidth: width, naturalHeight: height} = img;
+				let minDist = height / 15, maxDist = height;
+				let gridSize = (imgRight - imgLeft) / 9, gridStart = imgLeft, gridMargin = gridSize / 2;
+				let x = Math.round(Math.max(0, gridStart - gridMargin)), y = 0;
+				let w = Math.round(Math.min(width, gridStart + 9 * gridSize + gridMargin) - x), h = height;
+				let canvas = Object.assign(document.createElement('canvas'), {width: w, height: h, 'image-rendering': 'pixelated'}), ctx = canvas.getContext('2d');
+				document.body.appendChild(canvas);
+				ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+				throw new Error();
+				applyEdgeFilter(ctx, opts);
+				width = canvas.width;
+				height = canvas.height;
+				let left = imgLeft - x, right = imgRight - x;
+				let iData = ctx.getImageData(0, 0, width, height), d = iData.data;
+				let pixelThreshold = threshold1;
+				let scanThreshold = 1;
+				let missThreshold = 2;
+				let ff = 1; //fuzzFactor = 5;
+				let doubleF = fuzzFactor * 2;
+				let xMid = Math.round(width / 2), yMid = Math.round(height / 2);
+				const scanV = (xCenter, y, yEnd) => {
+					let step = Math.sign(yEnd - y);
+					let xFrom = Math.max(0, xCenter - ff), xTo = Math.min(width, xCenter + ff);
+					let lastHit = y, misses = 0;
+					while(y !== yEnd) {
+						let sum = 0;
+						for(let x = xFrom; x < xTo; x++) {
+							let i = (y * width + x) * 4;
+							sum += (d[i+0] + d[i+1] + d[i+2]) < pixelThreshold * 3 ? 1 : 0;
+						}
+						if(sum < scanThreshold) {
+							misses++;
+						}
+						else {
+							misses = 0;
+							lastHit = y;
+						}
+						//line(ctx, xCenter - ff, y, xCenter + ff, y, (sum < scanThreshold) ? '#f00a' : '#0f0a');
+						if(misses >= missThreshold) break;
+						y += step;
+					}
+					return lastHit;
+				};
+				const scanH = (yCenter, x, xEnd) => {
+					let step = Math.sign(xEnd - x);
+					let yFrom = Math.max(0, yCenter - ff), yTo = Math.min(height, yCenter + ff);
+					let lastHit = x, misses = 0;
+					while(x !== xEnd) {
+						let sum = 0;
+						for(let y = yFrom; y < yTo; y++) {
+							let i = (y * width + x) * 4;
+							sum += (d[i+0] + d[i+1] + d[i+2]) < pixelThreshold * 3 ? 1 : 0;
+						}
+						if(sum < scanThreshold) {
+							misses++;
+						}
+						else {
+							misses = 0;
+							lastHit = x;
+						}
+						//line(ctx, x, yCenter - ff, x, yCenter + ff, (sum < scanThreshold) ? '#f00a' : '#0f0a');
+						if(misses >= missThreshold) break;
+						x += step;
+					}
+					return lastHit;
+				};
+				const scanRange = (scanFunc, start, end, from, to, min) => {
+					let res = {};
+					for(var i = start; i < end; i++) {
+						let val = scanFunc(i, from, to);
+						if(Math.abs(from - val) > min) {
+							res[val] = res[val] || 0;
+							res[val]++;
+						}
+					}
+					return Object.keys(res).map(i => [parseInt(i), res[i]]).sort((a, b) => b[1] - a[1]);
+				};
+
+				let tops = scanRange(scanV, 0, width, yMid, 0, minDist * 4);
+				let bots = scanRange(scanV, 0, width, yMid, height - 1, minDist * 4);
+				let lefts = scanRange(scanH, 0, height, xMid, 0, minDist * 4);
+				let rights = scanRange(scanH, 0, height, xMid, width - 1, minDist * 4);
+				let l = lefts[0][0], r = rights[0][0], t = tops[0][0], b = bots[0][0];
+				return {left: lefts[0][0], right: rights[0][0], top: tops[0][0], bottom: bots[0][0], canvas};
+			};
+
+			let {left, right, canvas: hCanvas} = findGridLeftRight(img);
+			let edges = scanForGridLines(img, left, right);
+			//console.log('edges:', edges);
+			
+			let gridSize = (right - left) / 9, gridMargin = gridSize / 2;
+			let x = Math.round(Math.max(0, left - gridMargin));
+
+			edges.left += x;
+			edges.right += x;
+
+			let ctx = hCanvas.getContext('2d');
+			ctx.drawImage(img, 0, 0);
+			ctx.fillStyle = '#f0fa';
+			ctx.fillRect(edges.left, edges.top, edges.right - edges.left, edges.bottom - edges.top);
+
+			//img.remove();
+			//edges.canvas.remove();
+			//hCanvas.remove();
+			delete edges.canvas;
+			return edges;
+		};
+
+		return findGridBBox;
+	})();
+
+
+	const findGridBBox = (() => {
+		let canvas, ctx, iData, d, dlen, width, height, minW, minH;
+		let pixelThreshold = 200;
+		let scanThreshold = 1;
+		let missThreshold = 1;
+		let ratioThreshold = 1.05;
+		let ff = 3;
+		let DEBUG = false;
+
+		const scanV = (xc, y0, y1) => {
+			let yStep = Math.sign(y1 - y0);
+			let x0 = Math.max(0, xc - ff), x1 = Math.min(width, xc + ff);
+			let y = y0;
+			let lastHit = y, misses = 0;
+			while(y !== y1) {
+				let sum = 0;
+				for(let x = x0; x < x1; x++) {
+					let i = (y * width + x) * 4;
+					sum += (d[i+0] + d[i+1] + d[i+2]) < pixelThreshold * 3 ? 1 : 0;
+				}
+				if(DEBUG) line(ctx, xc - ff, y, xc + ff, y, (sum < scanThreshold) ? '#f00a' : '#0f0a');
+				if(sum < scanThreshold) {
+					misses++;
+					if(misses >= missThreshold) break;
+				}
+				else {
+					misses = 0;
+					lastHit = y;
+				}
+				y += yStep;
+			}
+			return lastHit;
+		};
+		const scanH = (x0, yc, x1) => {
+			let xStep = Math.sign(x1 - x0);
+			let y0 = Math.max(0, yc - ff), y1 = Math.min(height, yc + ff);
+			let x = x0;
+			let lastHit = x, misses = 0;
+			while(x !== x1) {
+				let sum = 0;
+				for(let y = y0; y < y1; y++) {
+					let i = (y * width + x) * 4;
+					sum += (d[i+0] + d[i+1] + d[i+2]) < pixelThreshold * 3 ? 1 : 0;
+				}
+				if(DEBUG) line(ctx, x, yc - ff, x, yc + ff, (sum < scanThreshold) ? '#f00a' : '#0f0a');
+				if(sum < scanThreshold) {
+					misses++;
+					if(misses >= missThreshold) break;
+				}
+				else {
+					misses = 0;
+					lastHit = x;
+				}
+				x += xStep;
+			}
+			return lastHit;
+		};
+		const findTBH = (x, y) => {
+			let top = scanV(x, y, 0), bottom = scanV(x, y, height - 1);
+			return {x, y, top, bottom, height: bottom - top};
+		};
+		const findNextTBHRight = (x, y) => {
+			while(x < width - 1) {
+				let tbh = findTBH(x, y);
+				if(tbh.height > minH) return tbh;
+				x += ff;
+			}
+		};
+		const findNextTBHLeft = (x, y) => {
+			while(x >= 0) {
+				let tbh = findTBH(x, y);
+				if(tbh.height > minH) return tbh;
+				x -= ff;
+			}
+		};
+		const findNextTBH = (x, y) => findNextTBHRight(x, y) || findNextTBHLeft(x, y);
+		const findLRW = (x, y) => {
+			let left = scanH(x, y, 0), right = scanH(x, y, width - 1);
+			return {x, y, left, right, width: right - left};
+		};
+		const findNextLRWUp = (x, y) => {
+			while(y < height - 1) {
+				let lrw = findLRW(x, y);
+				if(lrw.width > minW) return lrw;
+				y += ff;
+			}
+		};
+		const findNextLRWDown = (x, y) => {
+			while(y >= 0) {
+				let lrw = findLRW(x, y);
+				if(lrw.width > minW) return lrw;
+				y -= ff;
+			}
+		};
+		const findNextLRW = (x, y) => findNextLRWUp(x, y) || findNextLRWDown(x, y);
+		const calcAR = (lrw, tbh) => normRatio(lrw.width, tbh.height);
+		const findBBox = (xc, yc) => {
+			let slices = 3;
+			let tbh, lrw;
+			let samples = [];
+			tbh = findNextTBH(xc, yc);
+			if(tbh) {
+				samples.push(tbh);
+				for(var y = tbh.top; y < tbh.bottom; y += tbh.height / slices) {
+					lrw = findNextLRW(tbh.x, Math.round(y));
+					if(lrw && Math.abs(y - lrw.y) <= tbh.height / slices) samples.push(lrw);
+				}
+			}
+			lrw = findNextLRW(xc, yc);
+			if(lrw) {
+				samples.push(lrw);
+				for(var x = lrw.left; x < lrw.right; x += lrw.width / slices) {
+					tbh = findNextTBH(Math.round(x), lrw.y);
+					if(tbh && Math.abs(x - tbh.x) <= lrw.width / slices) samples.push(tbh);
+				}
+			}
+			if(samples.length === 0) return;
+			let sizes = {};
+			samples.forEach(sample => {
+				let size = sample.width || sample.height;
+				sizes[size] = sizes[size] || 0;
+				sizes[size]++;
+			});
+			let majSize = Object.keys(sizes).map(i => [parseInt(i), sizes[i]]).sort((a, b) => b[1] - a[1])[0][0];
+			let lefts = [], rights = [], tops = [], bottoms = [];
+			samples
+				.filter(s => Math.abs((s.width || s.height) - majSize) < 3)
+				.forEach(s => {
+					if(s.left) lefts.push(s.left);
+					if(s.right) rights.push(s.right);
+					if(s.top) tops.push(s.top);
+					if(s.bottom) bottoms.push(s.bottom);
+				});
+			if(lefts.length === 0 || rights.length === 0 || tops.length === 0 || rights.bottoms === 0) return;
+			let left = lefts.reduce((sum, n) => sum + n, 0) / lefts.length;
+			let right = rights.reduce((sum, n) => sum + n, 0) / rights.length;
+			let top = tops.reduce((sum, n) => sum + n, 0) / tops.length;
+			let bottom = bottoms.reduce((sum, n) => sum + n, 0) / bottoms.length;
+			let size = Math.round(((bottom - top) + (right - left)) / 2);
+			return {
+				top: Math.round(top),
+				bottom: Math.round(top + height),
+				left: Math.round(left),
+				right: Math.round(left + width),
+				width: size,
+				height: size
+			};
+		};
+		const findGrids = opts => {
+			let xStep = width / 10, yStep = height / 10;
+			let bboxes = {};
+			for(let y = yStep; y < height - yStep; y += yStep) {
+				for(let x = xStep; x < width - xStep; x += xStep) {
+					let bbox = findBBox(x, y);
+					if(bbox) bboxes[[bbox.left, bbox.right, bbox.top, bbox.bottom].join('_')] = bbox;
+				}
+			}
+			return Object.values(bboxes);
+		};
+		const drawBBox = (ctx, bbox, color) => {
+			ctx.fillStyle = color;
+			ctx.fillRect(bbox.left, bbox.top, bbox.width, bbox.height);
+		};
+		const removeColors = (colorThreshold = 50, lightThreshold = 200, darkThreshold = 50) => {
+			console.log('removeColors:');
+			for(var i = 0; i < dlen; i += 4) {
+				let min = Math.min(d[i+0], d[i+1], d[i+2]), max = Math.max(d[i+0], d[i+1], d[i+2]);
+				if(max < darkThreshold) {
+					d[i+0] = d[i+1] = d[i+2] = 0;
+				}
+				if((min > lightThreshold) || (max - min > colorThreshold)) {
+					d[i+0] = d[i+1] = d[i+2] = 255;
+				}
+			}
+			ctx.putImageData(iData, 0, 0);
+		};
+		const prepareCanvas = inCanvas => {
+			console.log('prepareCanvas:', inCanvas);
+			if(inCanvas) {
+				canvas = inCanvas;
+				ctx = canvas.getContext('2d');
+				width = canvas.width;
+				height = canvas.height;
+				minH = height * 0.2;
+				minW = height * 0.2;
+			}
+			iData = ctx.getImageData(0, 0, width, height);
+			d = iData.data;
+			dlen = d.length;
+			//removeColors(30, 210, 50);
+			removeColors(70, 210, 50);
+		};
+
+		const findBoardBBox = inCanvas => {
+			console.warn('findBoardBBox');
+			prepareCanvas(inCanvas);
+			let grids = findGrids();
+			return grids.sort((a, b) => b.width - a.width);
+		};
+
+		findBoardBBox.debugHandler = img => {
+			const handleCanvasClick = async event => {
+				let {offsetX: mx, offsetY: my} = event;
+				ctx.drawImage(img, 0, 0);
+				prepareCanvas();
+				let bbox = findBBox(mx, my);
+				console.log('findBBox(%s, %s):', mx, my, bbox);
+				if(bbox) drawBBox(ctx, bbox, '#f0fa');
+			};
+			canvas.addEventListener('click', handleCanvasClick);
+		};
+
+		DEBUG = true;
+		return findBoardBBox;
+	})();
+
+	const handleTesting = async event => {
+		let appElem = document.getElementById('app');
+		
+		const testVideoFrame = async (videoId, frameTime) => {
+			let json = await fetchJson(`/fetchvideoframe/${videoId}/${frameTime}`);
+			let img;
+			try {
+				img = await fetchImg(json.frame);
+			}
+			catch(err) {
+				console.error('Error in urlToImg', err);
+				throw err;
+			}
+			appElem.appendChild(img);
+			testEdgeScanner(img);
+		};
+
+		const testVideoScan = async (videoId) => {
+			console.log('testVideoScan:', videoId);
+
+			const getFrame = async (videoId, frameTime) =>
+				await PuzzleTools.urlToImg((await fetchJson(`/fetchvideoframe/${videoId}/${frameTime}`)).frame);
+
+			let blankFrameImg = await getFrame(videoId, -120);
+			document.body.appendChild(blankFrameImg);
+			let blankFrameCanvas = imgToCanvas(blankFrameImg);
+			document.body.appendChild(blankFrameCanvas);
+			let edges = findGridBBox(blankFrameCanvas);
+			findGridBBox.debugHandler(blankFrameImg);
+			console.log('edges:', edges);
+			edges.forEach(bbox => {
+				console.log('  bbox:', bbox);
+				drawBBox(blankFrameCanvas.getContext('2d'), bbox, '#f0fa');
+			});
+			/*
+			let solvedFrameImg = await getFrame(videoId, -40);
+			document.body.appendChild(solvedFrameImg);
+			let solvedFrameCanvas = processVideoFrame(solvedFrameImg);
+			document.body.appendChild(solvedFrameCanvas);
+			*/
+		};
+
+		appElem.innerHTML = '';
+		let videoIds = [...testCases.map(({videoUrl}) => ytUrlToId(videoUrl)), 'PHhZjjvXgH4', 'l32JZFKFEsE'];
+		//videoIds = videoIds.filter((item, idx) => [8, 9, 12, 13].includes(idx));
+		console.log('videoIds:', videoIds);
+		//return await testVideoFrame(videoIds[1], 120);
+		//return await testVideoFrame(videoIds[1], -120);
+		return await testVideoScan(videoIds[15]);
+		
+		for(let i = 0; i < videoIds.length; i++) {
+			try {
+				//console.log('i:', i);
+				//appElem.appendChild(Object.assign(document.createElement('div'), {textContent: `${i}: ${videoIds[i]} / ${2 * 60}`}));
+				await testVideoFrame(videoIds[i], 10 * 60);
+				//appElem.appendChild(Object.assign(document.createElement('div'), {textContent: `${i}: ${videoIds[i]} / ${60 * 60}`}));
+				await testVideoFrame(videoIds[i], -120);
+				//console.log('/i:', i);
+			}
+			catch (err) {
+				console.error('Error for ', videoIds[i], err);
+			}
+		}
+	};
+
+
+	const testImageProcessing = async () => {
+		//let imgUrl = 'http://localhost:8080/frames/frame_ZcsU1zHF1_0_-40.jpg';
+		let imgUrl = 'http://localhost:8080/frames/frame_jBioq8qvC2M_-40.jpg';
+		console.log(imgUrl);
+		let img = await fetchImg(imgUrl);
+		document.body.appendChild(img);
+		document.querySelector('#puzzleplayer').remove();
+		document.querySelector('#app').remove();
+
+		//filterByLAB(iData, [40, 10, -45], [35, 20, 25]);
+		[...Array(5).keys()]
+			//.map(i => [[30, 10, -45 + (-2 + i) * 5], [90, 40, 45]])
+			.map(i => [[40, 5, -35], [30, 10, 20]]) //+(-2+i)*5
+			.forEach(([comp, thres]) => {
+				let canvas = imgToCanvas(img);
+				document.body.appendChild(canvas);
+				let {width, height} = canvas;
+				let ctx = canvas.getContext('2d');
+				let iData = ctx.getImageData(0, 0, width, height), d = iData.data, dlen = d.length;
+				filterByLAB(iData, comp, thres);
+				ctx.putImageData(iData, 0, 0);
+			});
+			/*
+		let cols = [];
+		canvas.addEventListener('click', event => {
+			let {offsetX: mx, offsetY: my} = event;
+			let i = (my * width + mx) * 4;
+			let rgb = [d[i+0], d[i+1], d[i+2]];
+			cols.push(rgb);
+			let hsl = rgb2hsl(rgb);
+			let lab = rgb2lab(rgb);
+			console.log(mx, my, i, rgb, hsl, lab);
+			console.log('  rgb:', rgb);
+			console.log('  hsl:', hsl);
+			console.log('  lab:', lab);
+			d[i+0] = d[i+1] = d[i+2] = 0;
+			ctx.putImageData(iData, 0, 0);
+			const initABC = () => ({vals: [], min: [999, 999, 999], max: [-999, -999, -999], sum: [0, 0, 0]});
+			const updateABC = ({min, max, sum, vals}, abc) => {
+				vals.push(abc);
+				for(var i = 0; i < 3; i++) {
+					min[i] = Math.min(min[i], abc[i]);
+					max[i] = Math.max(max[i], abc[i]);
+					sum[i] += abc[i];
+				}
+			};
+			const printABC = ({min, max, sum, vals}) => {
+				console.log('  min:', min.map(c => c.toFixed(2)));
+				console.log('  max:', max.map(c => c.toFixed(2)));
+				console.log('  sum:', sum.map(c => c.toFixed(2)));
+				console.log('  avg:', sum.map(c => (c / vals.length).toFixed(2)));
+			};
+
+			let rgbStat = initABC();
+			let hslStat = initABC();
+			let labStat = initABC();
+			cols.forEach(rgb => {
+				let hsl = rgb2hsl(rgb);
+				let lab = rgb2lab(rgb);
+				updateABC(rgbStat, rgb);
+				updateABC(hslStat, hsl);
+				updateABC(labStat, lab);
+			});
+			console.log('rgb min/max/avg:');
+			console.log(rgbStat);
+			printABC(rgbStat);
+
+			console.log('hsl min/max/avg:');
+			console.log(hslStat);
+			printABC(hslStat);
+
+			console.log('lab min/max/avg:');
+			console.log(labStat);
+			printABC(labStat);
+		});
+		*/
+	};
+
+	window.addEventListener('load', event => {
+		//let btnElem = Object.assign(document.createElement('button'), {style: 'display: block;', textContent: 'Testing'});
+		//document.querySelector('#app').appendChild(btnElem);
+		//btnElem.addEventListener('click', handleTesting);
+		//handleTesting();
+		//let {videoUrl, correctSol} = testCases[15]; processVideo(videoUrl, correctSol, document.querySelector('.log'));
+		//testImageProcessing();
+	});

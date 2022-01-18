@@ -97,6 +97,14 @@
 						videoUrl: 'https://www.youtube.com/watch?v=6zwdqyfftaw',
 						correctSol: '135894627298763541467125839714256398653948172982371456349612785576489213821537964'
 					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=Q0896KKCoUM',
+						correctSol: '381645927746928315259713846825176493963584271174392568517439682692851734438267159'
+					},
+					{
+						videoUrl: 'https://www.youtube.com/watch?v=ZcsU1zHF1_0',
+						correctSol: '712465893398672145431987256576398412627514938945821367853749621164253789289136544'
+					},
 				];
 			let testcaseElem = document.querySelector('[name="testcase"]');
 			let videourlElem = document.querySelector('[name="videourl"]');
@@ -125,7 +133,7 @@
 			.forEach(name => document.head.appendChild(Object.assign(document.createElement('link'), {
 				rel: 'stylesheet', href: puzzleHost + name})));
 			document.head.appendChild(Object.assign(document.createElement('style'), {textContent: `
-				#puzzleplayer { width: auto; height: auto; }
+				#puzzleplayer { width: 360px; height: 360px; }
 				#puzzleplayer .board { opacity: 1; }
 				
 				.cell-value { font-size: 3rem !important; }
@@ -141,6 +149,10 @@
 				}
 				.cell { width: 40px; height: 40px; }
 				#app button { height: 1.5rem; line-height: 1.5rem; font-size: 1rem; border-radius: 0.2rem; }
+				canvas {
+					image-rendering: pixelated;
+					/*float: left;*/
+				}
 			`}));
 			[
 				'portableevents.js',
