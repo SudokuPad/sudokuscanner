@@ -1066,6 +1066,9 @@
 		if(typeof correctSol === 'string') correctSol = correctSol.split('');
 		let appElem = document.getElementById('app');
 		
+		appElem.appendChild(blankFrameImg);
+		appElem.appendChild(solvedFrameImg);
+
 		console.time('loadVideoFrame x2');
 		let blankFrameCanvas = loadVideoFrame(blankFrameImg);
 		let solvedFrameCanvas = loadVideoFrame(solvedFrameImg);
@@ -1074,8 +1077,6 @@
 		//let inCanvas = createDiffCanvas(blankFrameCanvas, solvedFrameCanvas);
 		let inCanvas = solvedFrameCanvas;
 
-		appElem.appendChild(blankFrameImg);
-		appElem.appendChild(solvedFrameImg);
 		let div = document.createElement('div');
 		appElem.appendChild(div);
 		div.appendChild(blankFrameCanvas);
@@ -1711,7 +1712,6 @@
 			ctx.fillRect(bbox.left, bbox.top, bbox.width, bbox.height);
 		};
 		const removeColors = (colorThreshold = 50, lightThreshold = 200, darkThreshold = 50) => {
-			console.log('removeColors:');
 			for(var i = 0; i < dlen; i += 4) {
 				let min = Math.min(d[i+0], d[i+1], d[i+2]), max = Math.max(d[i+0], d[i+1], d[i+2]);
 				if(max < darkThreshold) {
@@ -1724,14 +1724,13 @@
 			ctx.putImageData(iData, 0, 0);
 		};
 		const prepareCanvas = inCanvas => {
-			console.log('prepareCanvas:', inCanvas);
 			if(inCanvas) {
 				canvas = inCanvas;
 				ctx = canvas.getContext('2d');
 				width = canvas.width;
 				height = canvas.height;
-				minH = height * 0.2;
-				minW = height * 0.2;
+				minH = height * 0.3;
+				minW = height * 0.3;
 			}
 			iData = ctx.getImageData(0, 0, width, height);
 			d = iData.data;
@@ -1741,7 +1740,6 @@
 		};
 
 		const findBoardBBox = inCanvas => {
-			console.warn('findBoardBBox');
 			prepareCanvas(inCanvas);
 			let grids = findGrids();
 			return grids.sort((a, b) => b.width - a.width);
@@ -1759,7 +1757,7 @@
 			canvas.addEventListener('click', handleCanvasClick);
 		};
 
-		DEBUG = true;
+		//DEBUG = true;
 		return findBoardBBox;
 	})();
 
@@ -1907,6 +1905,64 @@
 		*/
 	};
 
+	const testFrameSeeking = async () => {
+		document.querySelector('#puzzleplayer').remove();
+		document.querySelector('#app').remove();
+
+		const fetchImgAtTime = async (videoId, time) => {
+			let frameUrl = (await fetchJson(`/fetchvideoframe/${videoId}/${time}`)).frame;
+			console.log('Fetching:', frameUrl);
+			return await PuzzleTools.urlToImg(frameUrl);
+		};
+		const getBBoxAtTime = async (videoId, time) => findGridBBox(imgToCanvas(await fetchImgAtTime(videoId, time)))[0];
+		const checkFrameAtTime = async (videoId, time) => {
+			console.log('checkFrameAtTime("%s", %s);', videoId, time);
+			let img = await fetchImgAtTime(videoId, time);
+			document.body.appendChild(Object.assign(document.createElement('div'), {textContent: `${videoId}: ${time}`}));
+			document.body.appendChild(img);
+			let canvas = imgToCanvas(img), ctx = canvas.getContext('2d');
+			document.body.appendChild(canvas);
+			let bboxes = findGridBBox(canvas);
+			console.log('bboxes:', bboxes);
+			bboxes.forEach((bbox, i, a) => drawBBox(ctx, bbox, `rgba(255, 0, 255, ${(a.length - i) / a.length})`));
+			return bboxes[0];
+		};
+		const roundToTime = 10;
+		const minBBoxHeight = 360 * 0.7;
+		const findFirstFrame = async (vidoeId, t0, t1) => {
+			if((t1 - t0) < roundToTime * 1.5) return false;
+			let tMid = t0 + Math.round((t1 - t0) * 0.5 / roundToTime) * roundToTime; // Round to nearest 10 secs
+			let bbox = await getBBoxAtTime(videoId, tMid);
+			if(bbox && bbox.height >= minBBoxHeight) return (await findFirstFrame(videoId, t0, tMid)) || tMid;
+			return await findFirstFrame(videoId, tMid, t1);
+		};
+		const findLastFrame = async (vidoeId, t0, t1) => {
+			if((t1 - t0) < roundToTime * 1.5) return false;
+			let tMid = t0 + Math.round((t1 - t0) * 0.5 / roundToTime) * roundToTime; // Round to nearest 10 secs
+			let bbox = await getBBoxAtTime(videoId, tMid);
+			if(bbox && bbox.height >= minBBoxHeight) return (await findLastFrame(videoId, tMid, t1)) || tMid;
+			return await findLastFrame(videoId, t0, tMid);
+		};
+
+		let videoId = '_ML9E5XGync';
+		//let videoId = 'ZcsU1zHF1_0';
+		console.log('  videoId:', videoId);
+		let videoInfo = await fetchVideoInfo(videoId);
+		console.log('  videoInfo:', videoInfo);
+		let videoDuration = videoInfo.duration;
+		console.time('firstFrameTime');
+		let firstFrameTime = await findFirstFrame(videoId, 0, videoDuration);
+		console.timeEnd('firstFrameTime');
+		console.time('lastFrameTime');
+		let lastFrameTime = await findLastFrame(videoId, 0, videoDuration);
+		console.timeEnd('lastFrameTime');
+		console.log('firstFrameTime:', firstFrameTime);
+		console.log('lastFrameTime:', lastFrameTime);
+		if(firstFrameTime) await checkFrameAtTime(videoId, firstFrameTime);
+		if(lastFrameTime) await checkFrameAtTime(videoId, lastFrameTime);
+
+	};
+
 	window.addEventListener('load', event => {
 		//let btnElem = Object.assign(document.createElement('button'), {style: 'display: block;', textContent: 'Testing'});
 		//document.querySelector('#app').appendChild(btnElem);
@@ -1914,4 +1970,5 @@
 		//handleTesting();
 		//let {videoUrl, correctSol} = testCases[15]; processVideo(videoUrl, correctSol, document.querySelector('.log'));
 		//testImageProcessing();
+		//testFrameSeeking();
 	});
