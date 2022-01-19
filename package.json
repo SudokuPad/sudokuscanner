@@ -9,6 +9,8 @@
   "author": "Sven Neumann <killroy@gmail.com>",
   "license": "ISC",
   "dependencies": {
+    "@ffmpeg/core": "^0.10.0",
+    "@ffmpeg/ffmpeg": "^0.10.1",
     "mkdirp": "^1.0.4",
     "node-fetch": "^2.6.6",
     "nodemon": "^2.0.15"
