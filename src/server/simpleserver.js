@@ -121,12 +121,13 @@ const SimpleServer = (() => {
 			case 'jpeg':
 			case 'png':
 				return `image/${ext}`;
+			case 'wasm': return 'application/wasm';
 			default: return 'text/html';
 		}
 	};
-	SS.serveStaticPath = relPath => (url, request, response) => SS.serveStatic(
+	SS.serveStaticPath = (relPath, headers = {}) => (url, request, response) => SS.serveStatic(
 			path.join(relPath, url.pathname),
-			{headers: {'Content-Type': `${SS.pathToContentType(url.pathname)}; charset=UTF-8`}}
+			{headers: Object.assign({'Content-Type': `${SS.pathToContentType(url.pathname)}; charset=UTF-8`}, headers)}
 		)(url, request, response);
 
 	P.handleServerRequest = function(request, response) {

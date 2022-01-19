@@ -1,6 +1,7 @@
 const mkdirp = require('mkdirp');
 const util = require('util');
-const fs = require('fs').promises;
+const fs = require('fs');
+const fsp = require('fs').promises;
 const path = require('path');
 const fetch = require('node-fetch');
 const exec = util.promisify(require('child_process').exec);
@@ -66,7 +67,7 @@ const handleFetchVideoDescription = async (url, request, response) => {
 		console.log('handleFetchVideoDescription > videoId:', videoId);
 		let descFn = `${descriptionsPath}desc_${videoId}.description`;
 		if(!(await fileExists(descFn))) descFn = await fetchYTDescription(videoId, `${descriptionsPath}desc_${videoId}`);
-		let res = await fs.readFile(descFn, 'utf8');
+		let res = await fsp.readFile(descFn, 'utf8');
 		response.end(JSON.stringify({description: res}));
 	}
 	catch (err) {
@@ -201,8 +202,12 @@ const handleCTCProxy = async (url, request, response) => {
 	}
 };
 
-
+let corsHeaders = {
+	'Cross-Origin-Embedder-Policy': 'require-corp',
+	'Cross-Origin-Opener-Policy': 'same-origin',
+};
 let routes = [
+	{route: '/', handler: serveStatic('./src/www/index.html', {headers: corsHeaders})},
 	{route: /^\/testmultiframe\/(.*)/, handler: handleTestMultiFrame},
 	{route: '/favicon.ico', handler: handle404},
 	{route: /^\/fetchvideo\/(.*)/, handler: handleFetchVideo},
@@ -213,8 +218,8 @@ let routes = [
 	{route: /^\/puzzle\/(.*)/, handler: handlePuzzle},
 	{route: /^\/frames\/(.*)/, handler: serveStaticPath(`${cachePath}`)},
 	{route: /^\/ctc\/(.*)/, handler: handleCTCProxy},
-	{route: '/', handler: serveStatic('./src/www/index.html')},
-	{route: /^\/(.+)/, handler: serveStaticPath('./src/www/')},
+	{route: /^\/vendor\/ffmpeg\//, handler: serveStaticPath('./src/www/', corsHeaders)},
+	{route: /^\/(.+)/, handler: serveStaticPath('./src/www/', corsHeaders)},
 ];
 let args = loadArgs({
 	port: {key: 'p|port', re: '[0-9]+', default: 8080},
